@@ -3,10 +3,9 @@ import { Head } from '@inertiajs/vue3';
 import { ref, computed } from 'vue';
 import { currentEmployee, payrollAdjustments } from '@/stores/appState.js';
 
-const showSlipModal = ref(false);
-
 const pointsData = computed(() => {
-    const pts = currentEmployee.value.points || 270;
+    const isActive = currentEmployee.value.isActive !== false;
+    const pts = isActive ? (currentEmployee.value.points || 270) : 0;
     const max = 900;
     const progressPercentage = Math.min(100, Math.round((pts / max) * 100));
 
@@ -14,7 +13,11 @@ const pointsData = computed(() => {
     let pointsNeeded = 500 - pts;
     let nextTargetReward = 'Rp100.000';
 
-    if (pts >= 900) {
+    if (!isActive) {
+        currentReward = 'Rp 0 (Nonaktif)';
+        pointsNeeded = 0;
+        nextTargetReward = 'Ditangguhkan';
+    } else if (pts >= 900) {
         currentReward = 'Rp250.000';
         pointsNeeded = 0;
         nextTargetReward = 'Maksimal';
@@ -32,6 +35,7 @@ const pointsData = computed(() => {
     }
 
     return {
+        isActive,
         current: pts,
         max,
         progressPercentage,
@@ -49,42 +53,42 @@ const pointsData = computed(() => {
 
 const salaryData = computed(() => {
     const emp = currentEmployee.value;
-    const daysWorked = 9;
+    const isActive = emp.isActive !== false;
+    const daysWorked = isActive ? 9 : 0;
     const dailyWage = Number(emp.wage) || 60000;
-    const grossSalary = daysWorked * dailyWage;
+    const grossSalary = isActive ? (daysWorked * dailyWage) : 0;
 
     // Adjustments
-    const empAdj = payrollAdjustments.value[emp.id] || [];
+    const empAdj = isActive ? (payrollAdjustments.value[emp.id] || []) : [];
     const bonus = empAdj.filter(a => a.type === 'bonus').reduce((acc, a) => acc + (Number(a.amount) || 0), 0);
     const deductions = empAdj.filter(a => a.type === 'potongan').reduce((acc, a) => acc + (Number(a.amount) || 0), 0);
     
     // Reward bonus from points
     let rewardFromPoints = 0;
-    if (emp.points >= 900) rewardFromPoints = 250000;
-    else if (emp.points >= 750) rewardFromPoints = 150000;
-    else if (emp.points >= 500) rewardFromPoints = 100000;
+    if (isActive) {
+        if (emp.points >= 900) rewardFromPoints = 250000;
+        else if (emp.points >= 750) rewardFromPoints = 150000;
+        else if (emp.points >= 500) rewardFromPoints = 100000;
+    }
 
-    const totalReward = rewardFromPoints + bonus;
-    const totalSalary = Math.max(0, grossSalary + totalReward - deductions);
+    const totalReward = isActive ? (rewardFromPoints + bonus) : 0;
+    const totalSalary = isActive ? Math.max(0, grossSalary + totalReward - deductions) : 0;
 
     return {
-        period: 'Periode Oktober 2026 • Sementara',
+        isActive,
+        period: isActive ? 'Periode Oktober 2026 • Sementara' : 'Periode Oktober 2026 • Ditangguhkan',
         daysWorked,
         dailyWage,
-        baseWage: `Rp ${grossSalary.toLocaleString('id-ID')}`,
-        rewardBonus: `+ Rp ${totalReward.toLocaleString('id-ID')}`,
-        deductions: `- Rp ${deductions.toLocaleString('id-ID')}`,
-        totalSalary: `Rp ${totalSalary.toLocaleString('id-ID')}`,
+        baseWage: isActive ? `Rp ${grossSalary.toLocaleString('id-ID')}` : 'Rp 0',
+        rewardBonus: isActive ? `+ Rp ${totalReward.toLocaleString('id-ID')}` : '+ Rp 0',
+        deductions: isActive ? `- Rp ${deductions.toLocaleString('id-ID')}` : '- Rp 0',
+        totalSalary: isActive ? `Rp ${totalSalary.toLocaleString('id-ID')}` : 'Rp 0 (Ditangguhkan)',
         grossSalary,
         totalReward,
         deductionsNum: deductions,
         totalSalaryNum: totalSalary,
     };
 });
-
-const printSlip = () => {
-    window.print();
-};
 </script>
 
 <template>
@@ -92,6 +96,14 @@ const printSlip = () => {
 
     <div class="p-6 sm:p-8 max-w-7xl mx-auto w-full space-y-6">
             
+            <!-- Inactive Employee Alert Banner -->
+            <div v-if="!currentEmployee.isActive" class="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 flex items-center gap-3 shadow-xs">
+                <div class="w-8 h-8 rounded-lg bg-rose-100 flex items-center justify-center shrink-0 text-rose-600 font-bold">!</div>
+                <div class="text-xs">
+                    <strong class="font-bold">Status Akun: Nonaktif.</strong> Seluruh hak estimasi upah dan reward poin ditangguhkan oleh administrator.
+                </div>
+            </div>
+
             <!-- Page Header -->
             <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
@@ -100,10 +112,14 @@ const printSlip = () => {
                         Rincian poin kehadiran real-time dan estimasi gaji berjalan Oktober 2026.
                     </p>
                 </div>
-                <button @click="showSlipModal = true" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition-colors shadow-2xs">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
-                    <span>Cetak Slip Sementara</span>
-                </button>
+                <div class="flex items-center gap-2">
+                    <span v-if="!currentEmployee.isActive" class="px-2.5 py-1 bg-rose-100 text-rose-700 text-xs font-bold rounded-md border border-rose-200">
+                        Nonaktif
+                    </span>
+                    <span class="px-3 py-1 bg-blue-50 text-blue-700 text-xs font-semibold rounded-md border border-blue-200/80">
+                        {{ currentEmployee.division }} ({{ currentEmployee.id }})
+                    </span>
+                </div>
             </div>
 
             <!-- 2 Columns Grid (Reference Photo 4) -->
@@ -189,56 +205,6 @@ const printSlip = () => {
                     </div>
                 </div>
 
-            </div>
-
-            <!-- Preview Slip Gaji Modal -->
-            <div v-if="showSlipModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-                <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-100">
-                    <div class="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
-                        <div>
-                            <h3 class="text-base font-bold text-slate-900">Slip Gaji Sementara</h3>
-                            <p class="text-xs text-slate-500">{{ currentEmployee.name }} • {{ currentEmployee.division }} ({{ currentEmployee.id }})</p>
-                        </div>
-                        <button @click="showSlipModal = false" class="text-slate-400 hover:text-slate-600 p-1">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                        </button>
-                    </div>
-
-                    <div class="bg-slate-50 rounded-xl p-4 space-y-2 text-xs border border-slate-100 mb-4">
-                        <div class="flex justify-between">
-                            <span class="text-slate-500">Upah Pokok Harian:</span>
-                            <span class="font-bold text-slate-800">Rp {{ salaryData.dailyWage.toLocaleString('id-ID') }} / hari</span>
-                        </div>
-                        <div class="flex justify-between">
-                            <span class="text-slate-500">Hari Masuk Aktual:</span>
-                            <span class="font-bold text-slate-800">{{ salaryData.daysWorked }} Hari</span>
-                        </div>
-                        <div class="flex justify-between">
-                            <span class="text-slate-500">Gaji Pokok Kehadiran:</span>
-                            <span class="font-bold text-slate-800">{{ salaryData.baseWage }}</span>
-                        </div>
-                        <div class="flex justify-between">
-                            <span class="text-slate-500">Bonus Reward Poin:</span>
-                            <span class="font-bold text-emerald-600">{{ salaryData.rewardBonus }}</span>
-                        </div>
-                        <div class="flex justify-between">
-                            <span class="text-slate-500">Potongan Denda:</span>
-                            <span class="font-bold text-rose-600">{{ salaryData.deductions }}</span>
-                        </div>
-                        <div class="pt-2 border-t border-slate-200 flex justify-between items-center text-sm">
-                            <span class="font-bold text-slate-900">Total Take Home Pay:</span>
-                            <span class="font-black text-blue-600">{{ salaryData.totalSalary }}</span>
-                        </div>
-                    </div>
-
-                    <div class="flex justify-end gap-3 pt-2 border-t border-slate-100">
-                        <button @click="showSlipModal = false" class="px-4 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-50">Tutup</button>
-                        <button @click="printSlip" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-sm">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
-                            <span>Cetak Slip</span>
-                        </button>
-                    </div>
-                </div>
             </div>
 
         </div>

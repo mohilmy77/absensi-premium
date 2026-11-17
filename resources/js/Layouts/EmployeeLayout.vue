@@ -1,6 +1,7 @@
 <script setup>
 import { Link, usePage } from '@inertiajs/vue3';
 import { ref, computed, watch } from 'vue';
+import { currentEmployee } from '@/stores/appState.js';
 
 const props = defineProps({
     title: {
@@ -123,12 +124,18 @@ const currentDate = new Date().toLocaleDateString('id-ID', {
 
                 <!-- Employee Profile Card -->
                 <div class="flex items-center gap-2.5 pt-2 border-t border-slate-100">
-                    <div class="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-xs shrink-0">
-                        RM
+                    <div class="w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shrink-0"
+                        :class="currentEmployee.isActive ? (currentEmployee.avatarBg || 'bg-blue-100 text-blue-700') : 'bg-slate-200 text-slate-500'">
+                        {{ currentEmployee.initials || 'EM' }}
                     </div>
                     <div class="flex-1 min-w-0">
-                        <p class="text-xs font-bold text-slate-900 truncate">Rahmat Malango</p>
-                        <p class="text-[10px] text-slate-400 truncate">Karyawan • Produksi</p>
+                        <p class="text-xs font-bold text-slate-900 truncate flex items-center gap-1">
+                            <span>{{ currentEmployee.name }}</span>
+                            <span v-if="!currentEmployee.isActive" class="px-1 py-0.2 bg-rose-100 text-rose-700 text-[9px] font-bold rounded">
+                                Nonaktif
+                            </span>
+                        </p>
+                        <p class="text-[10px] text-slate-400 truncate">{{ currentEmployee.id }} • {{ currentEmployee.division }}</p>
                     </div>
                     <Link href="/logout" method="post" as="button" class="text-slate-400 hover:text-rose-500 p-1 rounded-md transition-colors" title="Keluar">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>

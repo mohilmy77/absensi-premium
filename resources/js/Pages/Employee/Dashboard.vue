@@ -10,32 +10,35 @@ import {
 const employee = computed(() => {
     const emp = currentEmployee.value;
     const todayAtt = todayEmployeeAttendance.value;
-    const pts = emp.points || 270;
+    const isActive = emp.isActive !== false;
+    const pts = isActive ? (emp.points || 270) : 0;
     const targetRewardPoints = 900;
     const remainingPoints = Math.max(0, targetRewardPoints - pts);
     
     // Wage calculation
-    const daysWorked = 9;
+    const daysWorked = isActive ? 9 : 0;
     const dailyWage = Number(emp.wage) || 60000;
     const gross = daysWorked * dailyWage;
 
     // Adjustments
-    const empAdj = payrollAdjustments.value[emp.id] || [];
+    const empAdj = isActive ? (payrollAdjustments.value[emp.id] || []) : [];
     const bonus = empAdj.filter(a => a.type === 'bonus').reduce((acc, a) => acc + (Number(a.amount) || 0), 0);
     const deduction = empAdj.filter(a => a.type === 'potongan').reduce((acc, a) => acc + (Number(a.amount) || 0), 0);
-    const totalSalary = gross + bonus - deduction;
+    const totalSalary = isActive ? (gross + bonus - deduction) : 0;
 
     return {
+        isActive,
+        id: emp.id,
         name: emp.name.split(' ')[0],
         fullName: emp.name,
         division: emp.division,
         points: pts,
         targetRewardPoints,
         remainingPoints,
-        rewardAmount: 'Rp250.000',
-        runningSalary: `Rp ${totalSalary.toLocaleString('id-ID')}`,
-        todayClockIn: todayAtt?.timeIn || '—',
-        todayStatus: todayAtt?.status || 'Belum presensi',
+        rewardAmount: isActive ? 'Rp250.000' : 'Rp 0',
+        runningSalary: isActive ? `Rp ${totalSalary.toLocaleString('id-ID')}` : 'Rp 0 (Ditangguhkan)',
+        todayClockIn: isActive ? (todayAtt?.timeIn || '—') : '—',
+        todayStatus: isActive ? (todayAtt?.status || 'Belum presensi') : 'Akun Nonaktif',
         period: 'Oktober 2026',
         initials: emp.initials || emp.name.split(' ').map(n => n[0]).join(''),
     };
@@ -47,15 +50,28 @@ const employee = computed(() => {
 
     <div class="p-6 sm:p-8 max-w-7xl mx-auto w-full space-y-6">
             
+            <!-- Inactive Employee Alert Banner -->
+            <div v-if="!currentEmployee.isActive" class="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 flex items-center gap-3 shadow-xs">
+                <div class="w-8 h-8 rounded-lg bg-rose-100 flex items-center justify-center shrink-0 text-rose-600 font-bold">!</div>
+                <div class="text-xs">
+                    <strong class="font-bold">Akun Anda saat ini berstatus Nonaktif.</strong> Perhitungan upah berjalan dan presensi kehadiran ditangguhkan oleh administrator.
+                </div>
+            </div>
+
             <!-- Greeting & Division Header -->
             <div class="flex items-center justify-between">
                 <div>
                     <h1 class="text-2xl sm:text-[28px] font-extrabold text-slate-900 leading-tight">Halo, {{ employee.name }}</h1>
                     <p class="text-xs sm:text-sm text-slate-500 mt-1">Semangat bekerja! Setiap kehadiranmu menjaga kualitas es kristal kita.</p>
                 </div>
-                <span class="px-3 py-1 bg-blue-50 text-blue-700 text-xs font-semibold rounded-md border border-blue-200/80">
-                    {{ employee.division }}
-                </span>
+                <div class="flex items-center gap-2">
+                    <span v-if="!currentEmployee.isActive" class="px-2.5 py-1 bg-rose-100 text-rose-700 text-xs font-bold rounded-md border border-rose-200">
+                        Nonaktif
+                    </span>
+                    <span class="px-3 py-1 bg-blue-50 text-blue-700 text-xs font-semibold rounded-md border border-blue-200/80">
+                        {{ employee.division }} ({{ employee.id }})
+                    </span>
+                </div>
             </div>
 
             <!-- Row 1: 3 Metric Cards -->

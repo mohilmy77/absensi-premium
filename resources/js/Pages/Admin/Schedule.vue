@@ -1,6 +1,6 @@
 <script setup>
 import { Head } from '@inertiajs/vue3';
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { 
     employees, 
     schedules, 
@@ -90,6 +90,19 @@ const filteredEmployees = computed(() => {
         const matchDiv = selectedDivision.value === 'Semua divisi' || emp.division === selectedDivision.value;
         return matchName && matchDiv;
     });
+});
+
+// Pagination: 6 data per halaman
+const currentPage = ref(1);
+const pageSize = 6;
+const totalPages = computed(() => Math.ceil(filteredEmployees.value.length / pageSize) || 1);
+const paginatedEmployees = computed(() => {
+    const start = (currentPage.value - 1) * pageSize;
+    return filteredEmployees.value.slice(start, start + pageSize);
+});
+
+watch([searchQuery, selectedDivision], () => {
+    currentPage.value = 1;
 });
 
 const onShiftChange = (empId, dayIdx, newShift) => {
@@ -220,7 +233,7 @@ const exportScheduleCSV = () => {
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100">
-                            <tr v-for="emp in filteredEmployees" :key="emp.id" class="hover:bg-slate-50/50 transition-colors">
+                            <tr v-for="emp in paginatedEmployees" :key="emp.id" class="hover:bg-slate-50/50 transition-colors">
                                 <td class="px-6 py-4">
                                     <div class="flex items-center gap-3">
                                         <div class="w-9 h-9 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-[11px] shrink-0">
@@ -250,13 +263,40 @@ const exportScheduleCSV = () => {
                     </table>
                 </div>
 
-                <!-- Table Footer -->
-                <div class="p-4 border-t border-slate-100 flex justify-between items-center text-xs text-slate-500 bg-white">
-                    <span>Menampilkan {{ filteredEmployees.length }} dari {{ employees.length }} karyawan</span>
-                    <button @click="saveSchedule" class="text-blue-600 hover:text-blue-700 font-semibold hover:underline flex items-center gap-1">
-                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
-                        Simpan Perubahan Roster
-                    </button>
+                <!-- Table Footer (Pagination 6 data per halaman) -->
+                <div class="p-4 border-t border-slate-100 flex flex-col sm:flex-row justify-between items-center gap-3 text-xs text-slate-500 bg-white">
+                    <span>
+                        Menampilkan 
+                        <span class="font-semibold text-slate-700">{{ filteredEmployees.length === 0 ? 0 : (currentPage - 1) * pageSize + 1 }}</span> - 
+                        <span class="font-semibold text-slate-700">{{ Math.min(currentPage * pageSize, filteredEmployees.length) }}</span> 
+                        dari <span class="font-semibold text-slate-700">{{ filteredEmployees.length }}</span> karyawan
+                    </span>
+                    <div class="flex items-center gap-2">
+                        <button 
+                            @click="currentPage > 1 && currentPage--" 
+                            :disabled="currentPage <= 1"
+                            class="px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all"
+                            :class="currentPage <= 1 ? 'text-slate-300 bg-slate-50 border-slate-100 cursor-not-allowed' : 'text-slate-600 bg-white border-slate-200 hover:bg-slate-50 active:scale-95'">
+                            Sebelumnya
+                        </button>
+                        <div class="flex items-center gap-1">
+                            <button 
+                                v-for="p in totalPages" 
+                                :key="p" 
+                                @click="currentPage = p"
+                                class="w-7 h-7 text-xs rounded-lg transition-colors flex items-center justify-center"
+                                :class="p === currentPage ? 'bg-blue-600 text-white font-bold shadow-xs' : 'text-slate-600 hover:bg-slate-100 font-medium'">
+                                {{ p }}
+                            </button>
+                        </div>
+                        <button 
+                            @click="currentPage < totalPages && currentPage++" 
+                            :disabled="currentPage >= totalPages"
+                            class="px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all"
+                            :class="currentPage >= totalPages ? 'text-slate-300 bg-slate-50 border-slate-100 cursor-not-allowed' : 'text-slate-600 bg-white border-slate-200 hover:bg-slate-50 active:scale-95'">
+                            Berikutnya
+                        </button>
+                    </div>
                 </div>
             </div>
             

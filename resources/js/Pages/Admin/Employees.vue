@@ -1,12 +1,13 @@
 <script setup>
 import { Head } from '@inertiajs/vue3';
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { 
     employees, 
     addEmployee, 
     updateEmployee, 
     deleteEmployee, 
-    toggleEmployeeStatus 
+    toggleEmployeeStatus,
+    generateNextEmployeeId 
 } from '@/stores/appState.js';
 
 const searchQuery = ref('');
@@ -42,6 +43,19 @@ const filteredEmployees = computed(() => {
     });
 });
 
+// Pagination: 6 data per halaman
+const currentPage = ref(1);
+const pageSize = 6;
+const totalPages = computed(() => Math.ceil(filteredEmployees.value.length / pageSize) || 1);
+const paginatedEmployees = computed(() => {
+    const start = (currentPage.value - 1) * pageSize;
+    return filteredEmployees.value.slice(start, start + pageSize);
+});
+
+watch([searchQuery, selectedDivision], () => {
+    currentPage.value = 1;
+});
+
 // Modals state
 const showModal = ref(false);
 const showDeleteModal = ref(false);
@@ -70,9 +84,8 @@ const form = ref({
 
 const openAddModal = () => {
     editingEmployee.value = null;
-    const nextNum = employees.value.length + 1;
     form.value = {
-        nik: `PEK-${String(nextNum).padStart(3, '0')}`,
+        nik: generateNextEmployeeId('Produksi'),
         name: '',
         division: 'Produksi',
         phone: '',
@@ -80,6 +93,12 @@ const openAddModal = () => {
         wage: 50000,
     };
     showModal.value = true;
+};
+
+const onDivisionChange = () => {
+    if (!editingEmployee.value) {
+        form.value.nik = generateNextEmployeeId(form.value.division);
+    }
 };
 
 const openEditModal = (emp) => {
@@ -231,7 +250,7 @@ const resetPassword = (emp) => {
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100">
-                            <tr v-for="emp in filteredEmployees" :key="emp.id" class="hover:bg-slate-50 transition-colors">
+                            <tr v-for="emp in paginatedEmployees" :key="emp.id" class="hover:bg-slate-50 transition-colors">
                                 <td class="px-6 py-4">
                                     <div class="flex items-center gap-3">
                                         <div class="w-9 h-9 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-[11px] shrink-0">
@@ -276,13 +295,39 @@ const resetPassword = (emp) => {
                     </table>
                 </div>
                 
-                <!-- Table Footer (Pagination) -->
-                <div class="p-4 border-t border-slate-100 flex justify-between items-center bg-white">
-                    <span class="text-xs text-slate-500">Menampilkan {{ filteredEmployees.length }} dari {{ employees.length }} karyawan</span>
-                    <div class="flex items-center gap-4">
-                        <button class="px-3 py-1.5 text-xs font-semibold text-slate-400 bg-slate-50 border border-slate-100 rounded-md cursor-not-allowed">Sebelumnya</button>
-                        <span class="text-xs font-semibold text-slate-600">1 / 1</span>
-                        <button class="px-3 py-1.5 text-xs font-semibold text-slate-400 bg-slate-50 border border-slate-100 rounded-md cursor-not-allowed">Berikutnya</button>
+                <!-- Table Footer (Pagination 6 data per halaman) -->
+                <div class="p-4 border-t border-slate-100 flex flex-col sm:flex-row justify-between items-center gap-3 bg-white">
+                    <span class="text-xs text-slate-500">
+                        Menampilkan 
+                        <span class="font-semibold text-slate-700">{{ filteredEmployees.length === 0 ? 0 : (currentPage - 1) * pageSize + 1 }}</span> - 
+                        <span class="font-semibold text-slate-700">{{ Math.min(currentPage * pageSize, filteredEmployees.length) }}</span> 
+                        dari <span class="font-semibold text-slate-700">{{ filteredEmployees.length }}</span> karyawan
+                    </span>
+                    <div class="flex items-center gap-2">
+                        <button 
+                            @click="currentPage > 1 && currentPage--" 
+                            :disabled="currentPage <= 1"
+                            class="px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all"
+                            :class="currentPage <= 1 ? 'text-slate-300 bg-slate-50 border-slate-100 cursor-not-allowed' : 'text-slate-600 bg-white border-slate-200 hover:bg-slate-50 active:scale-95'">
+                            Sebelumnya
+                        </button>
+                        <div class="flex items-center gap-1">
+                            <button 
+                                v-for="p in totalPages" 
+                                :key="p" 
+                                @click="currentPage = p"
+                                class="w-7 h-7 text-xs rounded-lg transition-colors flex items-center justify-center"
+                                :class="p === currentPage ? 'bg-blue-600 text-white font-bold shadow-xs' : 'text-slate-600 hover:bg-slate-100 font-medium'">
+                                {{ p }}
+                            </button>
+                        </div>
+                        <button 
+                            @click="currentPage < totalPages && currentPage++" 
+                            :disabled="currentPage >= totalPages"
+                            class="px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all"
+                            :class="currentPage >= totalPages ? 'text-slate-300 bg-slate-50 border-slate-100 cursor-not-allowed' : 'text-slate-600 bg-white border-slate-200 hover:bg-slate-50 active:scale-95'">
+                            Berikutnya
+                        </button>
                     </div>
                 </div>
             </div>
@@ -313,8 +358,14 @@ const resetPassword = (emp) => {
                     <form @submit.prevent="saveEmployee" class="space-y-4">
                         <div class="grid grid-cols-2 gap-4">
                             <div class="space-y-1.5">
-                                <label class="text-xs font-semibold text-slate-600">NIK <span class="text-rose-500">*</span></label>
-                                <input v-model="form.nik" type="text" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all placeholder-slate-400" placeholder="Contoh: PEK-007">
+                                <label class="text-xs font-semibold text-slate-600 flex items-center justify-between">
+                                    <span>ID / NIK <span class="text-rose-500">*</span></span>
+                                    <span v-if="!editingEmployee" class="text-[10px] text-blue-600 font-semibold bg-blue-50 px-1.5 py-0.5 rounded">Otomatis Divisi</span>
+                                </label>
+                                <input v-model="form.nik" type="text" :readonly="!editingEmployee" 
+                                    class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono text-slate-900 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all placeholder-slate-400"
+                                    :class="!editingEmployee ? 'bg-slate-100 cursor-not-allowed text-slate-600 font-bold' : 'bg-slate-50'" 
+                                    placeholder="Contoh: PRD-001">
                             </div>
                             <div class="space-y-1.5">
                                 <label class="text-xs font-semibold text-slate-600">No. HP / WhatsApp <span class="text-rose-500">*</span></label>
@@ -331,7 +382,7 @@ const resetPassword = (emp) => {
                             <div class="space-y-1.5">
                                 <label class="text-xs font-semibold text-slate-600">Divisi <span class="text-rose-500">*</span></label>
                                 <div class="relative">
-                                    <select v-model="form.division" class="w-full appearance-none bg-slate-50 border border-slate-200 rounded-lg pl-3.5 pr-10 py-2 text-sm text-slate-900 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all cursor-pointer">
+                                    <select v-model="form.division" @change="onDivisionChange" class="w-full appearance-none bg-slate-50 border border-slate-200 rounded-lg pl-3.5 pr-10 py-2 text-sm text-slate-900 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all cursor-pointer">
                                         <option v-for="div in divisions" :key="div" :value="div">{{ div }}</option>
                                     </select>
                                     <div class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-slate-400">

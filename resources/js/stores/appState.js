@@ -63,10 +63,18 @@ export const createSampleSelfie = (name, time = '07:48', isVerified = true) => {
     return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg.trim());
 };
 
-// Initial default employees
+// Pemetaan prefix ID berdasarkan divisi
+export const DIVISION_PREFIXES = {
+    'Produksi': 'PRD',
+    'Driver': 'DRV',
+    'Supervisor': 'SPV',
+    'Kasir': 'KSR',
+};
+
+// Initial default employees (Urutan lama ke baru)
 const DEFAULT_EMPLOYEES = [
     {
-        id: 'PEK-001',
+        id: 'PRD-001',
         name: 'Rahmat Malango',
         division: 'Produksi',
         phone: '081244556601',
@@ -78,7 +86,7 @@ const DEFAULT_EMPLOYEES = [
         points: 270,
     },
     {
-        id: 'PEK-002',
+        id: 'PRD-002',
         name: 'Zul Ismail',
         division: 'Produksi',
         phone: '081244556602',
@@ -90,31 +98,7 @@ const DEFAULT_EMPLOYEES = [
         points: 270,
     },
     {
-        id: 'PEK-003',
-        name: 'Silfana Didipu',
-        division: 'Kasir',
-        phone: '081244556603',
-        statusKerja: 'Baru',
-        wage: 50000,
-        isActive: true,
-        avatarBg: 'bg-amber-100 text-amber-700',
-        initials: 'SD',
-        points: 260,
-    },
-    {
-        id: 'PEK-004',
-        name: 'Ambarak Ammarie',
-        division: 'Supervisor',
-        phone: '081244556604',
-        statusKerja: 'Baru',
-        wage: 50000,
-        isActive: true,
-        avatarBg: 'bg-purple-100 text-purple-700',
-        initials: 'AA',
-        points: 270,
-    },
-    {
-        id: 'PEK-005',
+        id: 'PRD-003',
         name: 'Zulfikar Umasugi',
         division: 'Produksi',
         phone: '081244556605',
@@ -126,7 +110,31 @@ const DEFAULT_EMPLOYEES = [
         points: 240,
     },
     {
-        id: 'PEK-006',
+        id: 'KSR-001',
+        name: 'Silfana Didipu',
+        division: 'Kasir',
+        phone: '081244556603',
+        statusKerja: 'Baru',
+        wage: 50000,
+        isActive: true,
+        avatarBg: 'bg-amber-100 text-amber-700',
+        initials: 'SD',
+        points: 260,
+    },
+    {
+        id: 'SPV-001',
+        name: 'Ambarak Ammarie',
+        division: 'Supervisor',
+        phone: '081244556604',
+        statusKerja: 'Baru',
+        wage: 50000,
+        isActive: true,
+        avatarBg: 'bg-purple-100 text-purple-700',
+        initials: 'AA',
+        points: 270,
+    },
+    {
+        id: 'DRV-001',
         name: 'Ramdan Ahmad',
         division: 'Driver',
         phone: '081244556606',
@@ -153,7 +161,7 @@ const DEFAULT_GEOFENCING = {
 const DEFAULT_ATTENDANCE = [
     {
         id: 'ATT-20261009-001',
-        employeeId: 'PEK-001',
+        employeeId: 'PRD-001',
         name: 'Rahmat Malango',
         division: 'Produksi',
         shift: 'Shift 1',
@@ -170,7 +178,7 @@ const DEFAULT_ATTENDANCE = [
     },
     {
         id: 'ATT-20261009-002',
-        employeeId: 'PEK-002',
+        employeeId: 'PRD-002',
         name: 'Zul Ismail',
         division: 'Produksi',
         shift: 'Shift 1',
@@ -187,7 +195,7 @@ const DEFAULT_ATTENDANCE = [
     },
     {
         id: 'ATT-20261009-003',
-        employeeId: 'PEK-003',
+        employeeId: 'KSR-001',
         name: 'Silfana Didipu',
         division: 'Kasir',
         shift: 'Shift 1',
@@ -204,7 +212,7 @@ const DEFAULT_ATTENDANCE = [
     },
     {
         id: 'ATT-20261009-004',
-        employeeId: 'PEK-004',
+        employeeId: 'SPV-001',
         name: 'Ambarak Ammarie',
         division: 'Supervisor',
         shift: 'Shift 1',
@@ -221,7 +229,7 @@ const DEFAULT_ATTENDANCE = [
     },
     {
         id: 'ATT-20261009-005',
-        employeeId: 'PEK-005',
+        employeeId: 'PRD-003',
         name: 'Zulfikar Umasugi',
         division: 'Produksi',
         shift: 'Shift 1',
@@ -238,7 +246,7 @@ const DEFAULT_ATTENDANCE = [
     },
     {
         id: 'ATT-20261009-006',
-        employeeId: 'PEK-006',
+        employeeId: 'DRV-001',
         name: 'Ramdan Ahmad',
         division: 'Driver',
         shift: 'Shift 1',
@@ -257,12 +265,12 @@ const DEFAULT_ATTENDANCE = [
 
 // Initial schedules
 const DEFAULT_SCHEDULES = {
-    'PEK-001': ['Shift 1', 'Shift 1', 'Shift 1', 'Shift 1', 'Shift 1', 'Libur', 'Shift 1'],
-    'PEK-002': ['Shift 1', 'Shift 1', 'Shift 1', 'Shift 1', 'Shift 1', 'Shift 1', 'Libur'],
-    'PEK-003': ['Shift 1', 'Shift 1', 'Shift 1', 'Shift 1', 'Shift 1', 'Shift 1', 'Shift 1'],
-    'PEK-004': ['Shift 1', 'Shift 1', 'Shift 1', 'Shift 1', 'Shift 1', 'Libur', 'Shift 1'],
-    'PEK-005': ['Shift 1', 'Shift 1', 'Shift 1', 'Shift 1', 'Shift 1', 'Shift 1', 'Libur'],
-    'PEK-006': ['Shift 1', 'Shift 1', 'Shift 1', 'Shift 1', 'Shift 1', 'Shift 1', 'Libur'],
+    'PRD-001': ['Shift 1', 'Shift 1', 'Shift 1', 'Shift 1', 'Shift 1', 'Libur', 'Shift 1'],
+    'PRD-002': ['Shift 1', 'Shift 1', 'Shift 1', 'Shift 1', 'Shift 1', 'Shift 1', 'Libur'],
+    'PRD-003': ['Shift 1', 'Shift 1', 'Shift 1', 'Shift 1', 'Shift 1', 'Shift 1', 'Libur'],
+    'KSR-001': ['Shift 1', 'Shift 1', 'Shift 1', 'Shift 1', 'Shift 1', 'Shift 1', 'Shift 1'],
+    'SPV-001': ['Shift 1', 'Shift 1', 'Shift 1', 'Shift 1', 'Shift 1', 'Libur', 'Shift 1'],
+    'DRV-001': ['Shift 1', 'Shift 1', 'Shift 1', 'Shift 1', 'Shift 1', 'Shift 1', 'Libur'],
 };
 
 // --- REACTIVE STATE SINGLETON (Pure in-memory, resets on refresh) ---
@@ -272,13 +280,36 @@ export const factorySettings = ref({ ...DEFAULT_GEOFENCING });
 export const schedules = ref(JSON.parse(JSON.stringify(DEFAULT_SCHEDULES)));
 export const payrollAdjustments = ref({});
 
-// Active current employee for employee portal (default Rahmat Malango)
-export const currentEmployeeId = ref('PEK-001');
+// Active current employee for employee portal (default Rahmat Malango: PRD-001)
+export const currentEmployeeId = ref('PRD-001');
+
+// Helper generator ID berikutnya berdasarkan divisi
+export const generateNextEmployeeId = (division = 'Produksi') => {
+    const prefix = DIVISION_PREFIXES[division] || 'PRD';
+    const matching = employees.value.filter(e => e.id && e.id.startsWith(prefix + '-'));
+    let maxNum = 0;
+    matching.forEach(e => {
+        const parts = e.id.split('-');
+        if (parts.length === 2) {
+            const num = parseInt(parts[1], 10);
+            if (!isNaN(num) && num > maxNum) {
+                maxNum = num;
+            }
+        }
+    });
+    return `${prefix}-${String(maxNum + 1).padStart(3, '0')}`;
+};
+
+// Helper cek apakah karyawan aktif
+export const isEmployeeActive = (id) => {
+    const emp = employees.value.find(e => e.id === id);
+    return emp ? emp.isActive : false;
+};
 
 // --- EMPLOYEE CRUD METHODS ---
 export const addEmployee = (data) => {
-    const nextNum = employees.value.length + 1;
-    const newId = data.id || `PEK-${String(nextNum).padStart(3, '0')}`;
+    const division = data.division || 'Produksi';
+    const newId = data.id || generateNextEmployeeId(division);
     const initials = data.name.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase();
     
     const colors = [
@@ -290,12 +321,12 @@ export const addEmployee = (data) => {
         'bg-blue-100 text-blue-700',
         'bg-indigo-100 text-indigo-700',
     ];
-    const avatarBg = colors[nextNum % colors.length];
+    const avatarBg = colors[employees.value.length % colors.length];
 
     const newEmp = {
         id: newId,
         name: data.name,
-        division: data.division || 'Produksi',
+        division,
         phone: data.phone || '081234567890',
         statusKerja: data.statusKerja || 'Baru',
         wage: Number(data.wage) || 50000,
@@ -305,7 +336,8 @@ export const addEmployee = (data) => {
         points: 250,
     };
 
-    employees.value.unshift(newEmp);
+    // Urutan lama ke baru: yang baru paling bawah / akhir
+    employees.value.push(newEmp);
 
     // Init schedule for new employee
     if (!schedules.value[newId]) {
@@ -395,6 +427,11 @@ export const submitEmployeeAttendance = ({ employeeId, timeIn, photo, lat, lng, 
     const emp = employees.value.find(e => e.id === employeeId) || employees.value[0];
     const today = new Date().toISOString().split('T')[0];
 
+    // Cek jika karyawan dinonaktifkan
+    if (!emp.isActive) {
+        throw new Error('Akun Anda dinonaktifkan oleh administrator.');
+    }
+
     // Determine on-time or late status (Shift 1 starts at 08.00)
     let status = 'Tepat waktu';
     let points = '+30';
@@ -454,6 +491,11 @@ export const submitEmployeeAttendance = ({ employeeId, timeIn, photo, lat, lng, 
 export const submitEmployeeClockOut = ({ employeeId, timeOut }) => {
     const emp = employees.value.find(e => e.id === employeeId) || employees.value[0];
     const today = new Date().toISOString().split('T')[0];
+
+    // Cek jika karyawan dinonaktifkan
+    if (!emp.isActive) {
+        throw new Error('Akun Anda dinonaktifkan oleh administrator.');
+    }
 
     const record = attendanceRecords.value.find(
         a => a.employeeId === emp.id && a.date === today

@@ -1,11 +1,10 @@
 <script setup>
 import { Head } from '@inertiajs/vue3';
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { 
     attendanceRecords, 
     employees, 
     addAttendanceRecord, 
-    updateAttendanceRecord, 
     deleteAttendanceRecord,
     createSampleSelfie
 } from '@/stores/appState.js';
@@ -31,11 +30,9 @@ const metrics = computed(() => [
 
 // Modals
 const showModal = ref(false);
-const showEditModal = ref(false);
 const showDeleteModal = ref(false);
 const showPhotoModal = ref(false);
 const selectedPhotoRecord = ref(null);
-const editingRecord = ref(null);
 const recordToDelete = ref(null);
 
 // Toast notification
@@ -56,6 +53,7 @@ const form = ref({
     shift: 'Shift 1',
     date: new Date().toISOString().split('T')[0],
     timeIn: '08:00',
+    timeOut: '-',
     status: 'Tepat waktu',
     notes: '',
     attachmentUrl: null,
@@ -67,25 +65,12 @@ const openAddModal = () => {
         shift: 'Shift 1',
         date: new Date().toISOString().split('T')[0],
         timeIn: '07:50',
+        timeOut: '-',
         status: 'Tepat waktu',
         notes: '',
         attachmentUrl: null,
     };
     showModal.value = true;
-};
-
-const openEditModal = (rec) => {
-    editingRecord.value = rec;
-    form.value = {
-        employeeId: rec.employeeId,
-        shift: rec.shift,
-        date: rec.date,
-        timeIn: rec.timeIn,
-        status: rec.status,
-        notes: rec.notes || '',
-        attachmentUrl: rec.attachment || null,
-    };
-    showEditModal.value = true;
 };
 
 const openPhotoModal = (rec) => {
@@ -131,7 +116,7 @@ const submitRecord = () => {
         shift: form.value.shift,
         date: form.value.date,
         timeIn: ['Sakit', 'Izin disetujui', 'Cuti', 'Alpa'].includes(form.value.status) ? '-' : form.value.timeIn,
-        timeOut: '-',
+        timeOut: form.value.timeOut || '-',
         status: form.value.status,
         points,
         photo,
@@ -146,29 +131,6 @@ const submitRecord = () => {
     showModal.value = false;
 };
 
-const saveEditedRecord = () => {
-    if (!editingRecord.value) return;
-
-    let points = editingRecord.value.points;
-    if (form.value.status === 'Tepat waktu') points = '+30';
-    else if (form.value.status === 'Terlambat') points = '+20';
-    else if (['Sakit', 'Izin disetujui', 'Cuti'].includes(form.value.status)) points = '-';
-    else if (form.value.status === 'Alpa') points = '0';
-
-    updateAttendanceRecord(editingRecord.value.id, {
-        shift: form.value.shift,
-        date: form.value.date,
-        timeIn: ['Sakit', 'Izin disetujui', 'Cuti', 'Alpa'].includes(form.value.status) ? '-' : form.value.timeIn,
-        status: form.value.status,
-        points,
-        notes: form.value.notes,
-        attachment: form.value.attachmentUrl || editingRecord.value.attachment,
-    });
-
-    triggerToast(`Data absensi ${editingRecord.value.name} berhasil diperbarui!`);
-    showEditModal.value = false;
-};
-
 const confirmDelete = (rec) => {
     recordToDelete.value = rec;
     showDeleteModal.value = true;
@@ -178,7 +140,7 @@ const executeDelete = () => {
     if (recordToDelete.value) {
         const name = recordToDelete.value.name;
         deleteAttendanceRecord(recordToDelete.value.id);
-        triggerToast(`Catatan absensi ${name} berhasil dihapus.`);
+        triggerToast(`Catatan absensi ${name} berhasil dihapus. Karyawan kini dapat melakukan absensi ulang.`);
         showDeleteModal.value = false;
         recordToDelete.value = null;
     }
@@ -195,10 +157,23 @@ const filteredRecords = computed(() => {
     });
 });
 
+// Pagination: 6 data per halaman
+const currentPage = ref(1);
+const pageSize = 6;
+const totalPages = computed(() => Math.ceil(filteredRecords.value.length / pageSize) || 1);
+const paginatedRecords = computed(() => {
+    const start = (currentPage.value - 1) * pageSize;
+    return filteredRecords.value.slice(start, start + pageSize);
+});
+
+watch([searchQuery, selectedDivision, selectedShift], () => {
+    currentPage.value = 1;
+});
+
 const exportAttendanceCSV = () => {
-    const headers = ['ID,EmployeeID,Nama,Divisi,Shift,Tanggal,Jam Masuk,Status,Poin,Catatan'];
+    const headers = ['ID,EmployeeID,Nama,Divisi,Shift,Tanggal,Jam Masuk,Jam Pulang,Status,Poin,Catatan'];
     const rows = filteredRecords.value.map(r => 
-        `"${r.id}","${r.employeeId || ''}","${r.name}","${r.division}","${r.shift}","${r.date || ''}","${r.timeIn}","${r.status}","${r.points}","${r.notes || ''}"`
+        `"${r.id}","${r.employeeId || ''}","${r.name}","${r.division}","${r.shift}","${r.date || ''}","${r.timeIn}","${r.timeOut || '-'}","${r.status}","${r.points}","${r.notes || ''}"`
     );
     const csvContent = 'data:text/csv;charset=utf-8,' + [headers, ...rows].join('\n');
     const encodedUri = encodeURI(csvContent);
@@ -300,6 +275,7 @@ const exportAttendanceCSV = () => {
                                 <th class="px-6 py-4 font-semibold">Divisi</th>
                                 <th class="px-6 py-4 font-semibold">Shift</th>
                                 <th class="px-6 py-4 font-semibold">Jam masuk</th>
+                                <th class="px-6 py-4 font-semibold">Jam pulang</th>
                                 <th class="px-6 py-4 font-semibold text-center">Status</th>
                                 <th class="px-6 py-4 font-semibold text-center">Bukti foto</th>
                                 <th class="px-6 py-4 font-semibold text-right">Poin</th>
@@ -307,7 +283,7 @@ const exportAttendanceCSV = () => {
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100">
-                            <tr v-for="att in filteredRecords" :key="att.id" class="hover:bg-slate-50 transition-colors">
+                            <tr v-for="att in paginatedRecords" :key="att.id" class="hover:bg-slate-50 transition-colors">
                                 <td class="px-6 py-4">
                                     <div class="flex items-center gap-3">
                                         <div class="w-9 h-9 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-[11px] shrink-0">
@@ -324,7 +300,10 @@ const exportAttendanceCSV = () => {
                                     <span class="text-xs font-semibold text-slate-700">{{ att.shift }}</span>
                                 </td>
                                 <td class="px-6 py-4 text-[13px] text-slate-600 font-medium">
-                                    {{ att.timeIn }} <span v-if="att.timeIn !== '-'" class="text-[10px] text-slate-400 font-normal">WITA</span>
+                                    {{ att.timeIn }} <span v-if="att.timeIn && att.timeIn !== '-'" class="text-[10px] text-slate-400 font-normal">WITA</span>
+                                </td>
+                                <td class="px-6 py-4 text-[13px] text-slate-600 font-medium">
+                                    {{ att.timeOut || '-' }} <span v-if="att.timeOut && att.timeOut !== '-'" class="text-[10px] text-slate-400 font-normal">WITA</span>
                                 </td>
                                 <td class="px-6 py-4 text-center">
                                     <span class="inline-flex items-center px-2.5 py-1 rounded-md text-[11px] font-bold border"
@@ -351,17 +330,14 @@ const exportAttendanceCSV = () => {
                                     <span v-else class="text-xs text-slate-400 italic">Tidak ada foto</span>
                                 </td>
                                 <td class="px-6 py-4 text-[13px] font-bold text-slate-700 text-right">{{ att.points }}</td>
-                                <td class="px-6 py-4 text-right space-x-1">
-                                    <button @click="openEditModal(att)" class="p-1.5 text-slate-400 hover:text-blue-600 transition-colors rounded-lg hover:bg-blue-50" title="Koreksi Absensi">
-                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
-                                    </button>
-                                    <button @click="confirmDelete(att)" class="p-1.5 text-slate-400 hover:text-rose-600 transition-colors rounded-lg hover:bg-rose-50" title="Hapus Catatan">
+                                <td class="px-6 py-4 text-right">
+                                    <button @click="confirmDelete(att)" class="p-1.5 text-slate-400 hover:text-rose-600 transition-colors rounded-lg hover:bg-rose-50" title="Hapus Catatan (Karyawan dapat absen ulang)">
                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                                     </button>
                                 </td>
                             </tr>
                             <tr v-if="filteredRecords.length === 0">
-                                <td colspan="8" class="px-6 py-12 text-center text-slate-400 text-xs">
+                                <td colspan="9" class="px-6 py-12 text-center text-slate-400 text-xs">
                                     Tidak ada data absensi yang sesuai dengan kriteria pencarian.
                                 </td>
                             </tr>
@@ -369,13 +345,39 @@ const exportAttendanceCSV = () => {
                     </table>
                 </div>
                 
-                <!-- Table Footer (Pagination) -->
-                <div class="p-4 border-t border-slate-100 flex justify-between items-center bg-white">
-                    <span class="text-xs text-slate-500">Menampilkan {{ filteredRecords.length }} dari {{ attendanceRecords.length }} absensi tercatat</span>
-                    <div class="flex items-center gap-4">
-                        <button class="px-3 py-1.5 text-xs font-semibold text-slate-400 bg-slate-50 border border-slate-100 rounded-md cursor-not-allowed">Sebelumnya</button>
-                        <span class="text-xs font-semibold text-slate-600">1 / 1</span>
-                        <button class="px-3 py-1.5 text-xs font-semibold text-slate-400 bg-slate-50 border border-slate-100 rounded-md cursor-not-allowed">Berikutnya</button>
+                <!-- Table Footer (Pagination 6 data per halaman) -->
+                <div class="p-4 border-t border-slate-100 flex flex-col sm:flex-row justify-between items-center gap-3 bg-white">
+                    <span class="text-xs text-slate-500">
+                        Menampilkan 
+                        <span class="font-semibold text-slate-700">{{ filteredRecords.length === 0 ? 0 : (currentPage - 1) * pageSize + 1 }}</span> - 
+                        <span class="font-semibold text-slate-700">{{ Math.min(currentPage * pageSize, filteredRecords.length) }}</span> 
+                        dari <span class="font-semibold text-slate-700">{{ filteredRecords.length }}</span> absensi tercatat
+                    </span>
+                    <div class="flex items-center gap-2">
+                        <button 
+                            @click="currentPage > 1 && currentPage--" 
+                            :disabled="currentPage <= 1"
+                            class="px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all"
+                            :class="currentPage <= 1 ? 'text-slate-300 bg-slate-50 border-slate-100 cursor-not-allowed' : 'text-slate-600 bg-white border-slate-200 hover:bg-slate-50 active:scale-95'">
+                            Sebelumnya
+                        </button>
+                        <div class="flex items-center gap-1">
+                            <button 
+                                v-for="p in totalPages" 
+                                :key="p" 
+                                @click="currentPage = p"
+                                class="w-7 h-7 text-xs rounded-lg transition-colors flex items-center justify-center"
+                                :class="p === currentPage ? 'bg-blue-600 text-white font-bold shadow-xs' : 'text-slate-600 hover:bg-slate-100 font-medium'">
+                                {{ p }}
+                            </button>
+                        </div>
+                        <button 
+                            @click="currentPage < totalPages && currentPage++" 
+                            :disabled="currentPage >= totalPages"
+                            class="px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all"
+                            :class="currentPage >= totalPages ? 'text-slate-300 bg-slate-50 border-slate-100 cursor-not-allowed' : 'text-slate-600 bg-white border-slate-200 hover:bg-slate-50 active:scale-95'">
+                            Berikutnya
+                        </button>
                     </div>
                 </div>
             </div>
@@ -526,55 +528,6 @@ const exportAttendanceCSV = () => {
                     <button @click="showModal = false" class="px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-200 bg-slate-100 rounded-lg transition-colors">Batal</button>
                     <button @click="submitRecord" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg shadow-sm transition-all active:scale-95 flex items-center gap-2">
                         Simpan Catatan
-                    </button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Edit Attendance Modal -->
-        <div v-if="showEditModal && editingRecord" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-            <div class="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-lg overflow-hidden transform transition-all">
-                <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-                    <div>
-                        <h3 class="text-lg font-bold text-slate-900">Koreksi Data Absensi</h3>
-                        <p class="text-xs text-slate-500 mt-0.5">{{ editingRecord.name }} ({{ editingRecord.division }})</p>
-                    </div>
-                    <button @click="showEditModal = false" class="text-slate-400 hover:text-slate-600 transition-colors p-1 rounded-md hover:bg-slate-100">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                    </button>
-                </div>
-                <div class="p-6 space-y-4">
-                    <div class="grid grid-cols-2 gap-4">
-                        <div class="space-y-1.5">
-                            <label class="text-xs font-semibold text-slate-600">Shift</label>
-                            <select v-model="form.shift" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:ring-1 focus:ring-blue-500 outline-none">
-                                <option value="Shift 1">Shift 1</option>
-                                <option value="Shift 2">Shift 2</option>
-                                <option value="Shift 3">Shift 3</option>
-                            </select>
-                        </div>
-                        <div class="space-y-1.5">
-                            <label class="text-xs font-semibold text-slate-600">Jam Masuk</label>
-                            <input v-model="form.timeIn" type="text" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:ring-1 focus:ring-blue-500 outline-none">
-                        </div>
-                    </div>
-
-                    <div class="space-y-1.5">
-                        <label class="text-xs font-semibold text-slate-600">Status Kehadiran</label>
-                        <select v-model="form.status" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:ring-1 focus:ring-blue-500 outline-none">
-                            <option v-for="stat in statuses" :key="stat" :value="stat">{{ stat }}</option>
-                        </select>
-                    </div>
-
-                    <div class="space-y-1.5">
-                        <label class="text-xs font-semibold text-slate-600">Catatan Koreksi</label>
-                        <textarea v-model="form.notes" rows="2" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 focus:ring-1 focus:ring-blue-500 outline-none placeholder-slate-400" placeholder="Alasan koreksi..."></textarea>
-                    </div>
-                </div>
-                <div class="px-6 py-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
-                    <button @click="showEditModal = false" class="px-4 py-2 text-sm font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors">Batal</button>
-                    <button @click="saveEditedRecord" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg shadow-sm transition-colors">
-                        Simpan Perubahan
                     </button>
                 </div>
             </div>

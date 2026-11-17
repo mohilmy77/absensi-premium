@@ -1,13 +1,13 @@
 <script setup>
 import { Head } from '@inertiajs/vue3';
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 
 // Filter & Search states
 const searchQuery = ref('');
 const selectedDivision = ref('Semua divisi');
 const divisions = ['Semua divisi', 'Produksi', 'Kasir', 'Supervisor', 'Driver'];
 
-// Pagination
+// Pagination (6 data per halaman)
 const currentPage = ref(1);
 const perPage = ref(6);
 
@@ -43,6 +43,10 @@ const adjustmentForm = ref({
 });
 
 const openAdjustmentModal = (emp) => {
+    if (!emp.isActive) {
+        alert('Karyawan ini berstatus Nonaktif. Aktifkan kembali karyawan terlebih dahulu untuk menambahkan penyesuaian gaji.');
+        return;
+    }
     selectedEmployee.value = emp;
     adjustmentForm.value = {
         type: 'bonus',
@@ -75,25 +79,28 @@ const removeAdjustment = (empId, adjId) => {
 // Dynamic Payroll calculation based on active employees and adjustments
 const employees = computed(() => {
     return rawEmployees.value.map(emp => {
-        const daysPaid = 9; // Current pay cycle worked days
+        const isActive = emp.isActive !== false;
+        const daysPaid = isActive ? 9 : 0; // Current pay cycle worked days
         const dailyWage = Number(emp.wage) || 50000;
-        const grossSalary = daysPaid * dailyWage;
-        const currentPoints = emp.points || 250;
+        const grossSalary = isActive ? (daysPaid * dailyWage) : 0;
+        const currentPoints = isActive ? (emp.points || 250) : 0;
 
         // Base reward from points tier
         let baseReward = 0;
-        if (currentPoints >= 900) baseReward = 250000;
-        else if (currentPoints >= 750) baseReward = 150000;
-        else if (currentPoints >= 500) baseReward = 100000;
+        if (isActive) {
+            if (currentPoints >= 900) baseReward = 250000;
+            else if (currentPoints >= 750) baseReward = 150000;
+            else if (currentPoints >= 500) baseReward = 100000;
+        }
 
         // Custom adjustments from store
-        const empAdjustments = payrollAdjustments.value[emp.id] || [];
+        const empAdjustments = isActive ? (payrollAdjustments.value[emp.id] || []) : [];
         const customBonus = empAdjustments.filter(a => a.type === 'bonus').reduce((acc, a) => acc + (Number(a.amount) || 0), 0);
         const customDeduction = empAdjustments.filter(a => a.type === 'potongan').reduce((acc, a) => acc + (Number(a.amount) || 0), 0);
 
-        const reward = baseReward + customBonus;
-        const deduction = customDeduction;
-        const total = Math.max(0, grossSalary + reward - deduction);
+        const reward = isActive ? (baseReward + customBonus) : 0;
+        const deduction = isActive ? customDeduction : 0;
+        const total = isActive ? Math.max(0, grossSalary + reward - deduction) : 0;
 
         const deductionsDetail = [
             ...empAdjustments.filter(a => a.type === 'potongan').map(a => ({ reason: a.title, amount: a.amount })),
@@ -105,6 +112,7 @@ const employees = computed(() => {
             division: emp.division,
             initials: emp.initials || emp.name.split(' ').map(n => n[0]).join(''),
             avatarBg: emp.avatarBg || 'bg-blue-100 text-blue-700',
+            isActive,
             daysPaid,
             dailyWage,
             currentPoints,
@@ -118,17 +126,21 @@ const employees = computed(() => {
     });
 });
 
-// Summary Calculations
+// Summary Calculations (Hanya menghitung karyawan aktif)
 const totalGross = computed(() => {
-    return employees.value.reduce((acc, curr) => acc + curr.total, 0);
+    return employees.value.filter(e => e.isActive).reduce((acc, curr) => acc + curr.total, 0);
 });
 
 const totalReward = computed(() => {
-    return employees.value.reduce((acc, curr) => acc + curr.reward, 0);
+    return employees.value.filter(e => e.isActive).reduce((acc, curr) => acc + curr.reward, 0);
 });
 
 const totalDeductions = computed(() => {
-    return employees.value.reduce((acc, curr) => acc + curr.deduction, 0);
+    return employees.value.filter(e => e.isActive).reduce((acc, curr) => acc + curr.deduction, 0);
+});
+
+const activeReceiversCount = computed(() => {
+    return employees.value.filter(e => e.isActive).length;
 });
 
 const filteredEmployees = computed(() => {
@@ -147,6 +159,10 @@ const paginatedEmployees = computed(() => {
 
 const totalPages = computed(() => {
     return Math.ceil(filteredEmployees.value.length / perPage.value) || 1;
+});
+
+watch([searchQuery, selectedDivision], () => {
+    currentPage.value = 1;
 });
 
 const formatCurrency = (val) => {
@@ -228,8 +244,8 @@ const exportCSV = () => {
                         </div>
                     </div>
                     <div>
-                        <span class="text-4xl font-extrabold text-slate-900 block mb-1">3,05 jt</span>
-                        <span class="text-[11px] font-medium text-slate-500">{{ formatCurrency(totalGross) }}</span>
+                        <span class="text-3xl font-extrabold text-slate-900 block mb-1">{{ formatCurrency(totalGross) }}</span>
+                        <span class="text-[11px] font-medium text-slate-500">Estimasi gaji aktif berjalan</span>
                     </div>
                 </div>
 
@@ -244,8 +260,8 @@ const exportCSV = () => {
                         </div>
                     </div>
                     <div>
-                        <span class="text-4xl font-extrabold text-slate-900 block mb-1">Rp {{ totalReward }}</span>
-                        <span class="text-[11px] font-medium text-slate-500">Reward sesuai poin saat ini</span>
+                        <span class="text-3xl font-extrabold text-slate-900 block mb-1">{{ formatCurrency(totalReward) }}</span>
+                        <span class="text-[11px] font-medium text-slate-500">Reward poin karyawan aktif</span>
                     </div>
                 </div>
 
@@ -260,8 +276,8 @@ const exportCSV = () => {
                         </div>
                     </div>
                     <div>
-                        <span class="text-4xl font-extrabold text-slate-900 block mb-1">100 rb</span>
-                        <span class="text-[11px] font-medium text-slate-500">Denda kehadiran berjalan</span>
+                        <span class="text-3xl font-extrabold text-slate-900 block mb-1">{{ formatCurrency(totalDeductions) }}</span>
+                        <span class="text-[11px] font-medium text-slate-500">Denda kehadiran & potongan</span>
                     </div>
                 </div>
 
@@ -276,10 +292,10 @@ const exportCSV = () => {
                         </div>
                     </div>
                     <div>
-                        <span class="text-4xl font-extrabold text-slate-900 block mb-1">
-                            12 <span class="text-base font-normal text-slate-500 ml-1">karyawan</span>
+                        <span class="text-3xl font-extrabold text-slate-900 block mb-1">
+                            {{ activeReceiversCount }} <span class="text-sm font-normal text-slate-500 ml-1">karyawan aktif</span>
                         </span>
-                        <span class="text-[11px] font-medium text-slate-500">Periode Oktober 2026</span>
+                        <span class="text-[11px] font-medium text-slate-500">{{ employees.length }} total • Periode Oktober 2026</span>
                     </div>
                 </div>
             </div>
@@ -288,10 +304,10 @@ const exportCSV = () => {
             <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 px-1">
                 <div class="inline-flex items-center gap-2 bg-blue-50/70 border border-blue-100 text-blue-700 px-3 py-1.5 rounded-lg text-xs font-semibold">
                     <svg class="w-3.5 h-3.5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-                    Periode 1-31 Oktober 2026 • Estimasi per 9 Oktober
+                    Periode 1-31 Oktober 2026 • Estimasi berjalan
                 </div>
                 <div class="text-xs text-slate-500 font-medium">
-                    31 hari kalender • Upah dasar Rp1.550.000
+                    Karyawan nonaktif ditangguhkan dari penerimaan upah & reward.
                 </div>
             </div>
 
@@ -344,51 +360,63 @@ const exportCSV = () => {
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100 text-slate-600">
-                            <tr v-for="emp in paginatedEmployees" :key="emp.id" class="hover:bg-slate-50/60 transition-colors">
+                            <tr v-for="emp in paginatedEmployees" :key="emp.id" 
+                                class="hover:bg-slate-50/60 transition-colors"
+                                :class="!emp.isActive ? 'bg-slate-50/30' : ''">
                                 
                                 <!-- Employee Info -->
                                 <td class="px-6 py-4">
                                     <div class="flex items-center gap-3">
-                                        <div class="w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs shrink-0" :class="emp.avatarBg">
+                                        <div class="w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs shrink-0" 
+                                            :class="emp.isActive ? emp.avatarBg : 'bg-slate-200 text-slate-500'">
                                             {{ emp.initials }}
                                         </div>
                                         <div>
-                                            <p class="font-bold text-slate-900 text-sm leading-tight">{{ emp.name }}</p>
-                                            <p class="text-[11px] text-slate-400 mt-0.5">{{ emp.division }}</p>
+                                            <p class="font-bold text-slate-900 text-sm leading-tight flex items-center gap-1.5">
+                                                <span>{{ emp.name }}</span>
+                                                <span v-if="!emp.isActive" class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-100 text-slate-500 border border-slate-200">
+                                                    Nonaktif
+                                                </span>
+                                            </p>
+                                            <p class="text-[11px] text-slate-400 mt-0.5">{{ emp.division }} • {{ emp.id }}</p>
                                         </div>
                                     </div>
                                 </td>
 
                                 <!-- Hari Dibayar -->
-                                <td class="px-6 py-4 font-medium text-slate-600">
-                                    {{ emp.daysPaid }} hari
+                                <td class="px-6 py-4 font-medium" :class="emp.isActive ? 'text-slate-600' : 'text-slate-400 italic'">
+                                    {{ emp.isActive ? `${emp.daysPaid} hari` : '0 hari (Nonaktif)' }}
                                 </td>
 
                                 <!-- Gaji Berjalan -->
-                                <td class="px-6 py-4 font-semibold text-slate-700">
-                                    {{ formatCurrency(emp.grossSalary) }}
+                                <td class="px-6 py-4 font-semibold" :class="emp.isActive ? 'text-slate-700' : 'text-slate-400'">
+                                    {{ emp.isActive ? formatCurrency(emp.grossSalary) : 'Rp 0' }}
                                 </td>
 
                                 <!-- Reward -->
-                                <td class="px-6 py-4 font-semibold text-slate-700">
-                                    {{ formatCurrency(emp.reward) }}
+                                <td class="px-6 py-4 font-semibold" :class="emp.isActive ? 'text-slate-700' : 'text-slate-400'">
+                                    {{ emp.isActive ? formatCurrency(emp.reward) : 'Rp 0' }}
                                 </td>
 
                                 <!-- Potongan -->
-                                <td class="px-6 py-4 font-semibold" :class="emp.deduction > 0 ? 'text-rose-600' : 'text-slate-700'">
-                                    <span v-if="emp.deduction > 0">- {{ formatCurrency(emp.deduction) }}</span>
-                                    <span v-else>{{ formatCurrency(0) }}</span>
+                                <td class="px-6 py-4 font-semibold" :class="emp.isActive && emp.deduction > 0 ? 'text-rose-600' : 'text-slate-400'">
+                                    <span v-if="emp.isActive && emp.deduction > 0">- {{ formatCurrency(emp.deduction) }}</span>
+                                    <span v-else-if="emp.isActive">{{ formatCurrency(0) }}</span>
+                                    <span v-else>Rp 0</span>
                                 </td>
 
                                 <!-- Total Diterima -->
-                                <td class="px-6 py-4 font-bold text-slate-900 text-sm">
-                                    {{ formatCurrency(emp.total) }}
+                                <td class="px-6 py-4 font-bold text-sm" :class="emp.isActive ? 'text-slate-900' : 'text-slate-400 italic'">
+                                    {{ emp.isActive ? formatCurrency(emp.total) : 'Rp 0 (Ditangguhkan)' }}
                                 </td>
 
                                 <!-- Action Icons: Sesuaikan & Slip -->
                                 <td class="px-6 py-4 text-center space-x-1">
-                                    <button @click="openAdjustmentModal(emp)" title="Sesuaikan Bonus & Potongan"
-                                        class="w-8 h-8 rounded-lg inline-flex items-center justify-center text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors">
+                                    <button @click="openAdjustmentModal(emp)" 
+                                        :title="emp.isActive ? 'Sesuaikan Bonus & Potongan' : 'Karyawan nonaktif - penyesuaian ditangguhkan'"
+                                        :disabled="!emp.isActive"
+                                        class="w-8 h-8 rounded-lg inline-flex items-center justify-center transition-colors"
+                                        :class="emp.isActive ? 'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 cursor-pointer' : 'text-slate-300 cursor-not-allowed'">
                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path>
                                         </svg>
@@ -411,11 +439,11 @@ const exportCSV = () => {
                     </table>
                 </div>
 
-                <!-- Pagination Footer -->
-                <div class="px-6 py-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+                <!-- Table Footer (Pagination 6 data per halaman) -->
+                <div class="px-6 py-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
                     <div>
                         Menampilkan 
-                        <span class="font-semibold text-slate-700">{{ ((currentPage - 1) * perPage) + 1 }}</span> - 
+                        <span class="font-semibold text-slate-700">{{ filteredEmployees.length === 0 ? 0 : ((currentPage - 1) * perPage) + 1 }}</span> - 
                         <span class="font-semibold text-slate-700">{{ Math.min(currentPage * perPage, filteredEmployees.length) }}</span> 
                         dari <span class="font-semibold text-slate-700">{{ filteredEmployees.length }}</span> karyawan
                     </div>
@@ -425,6 +453,16 @@ const exportCSV = () => {
                             class="px-3 py-1.5 border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed font-medium transition-colors">
                             Sebelumnya
                         </button>
+                        <div class="flex items-center gap-1">
+                            <button 
+                                v-for="p in totalPages" 
+                                :key="p" 
+                                @click="currentPage = p"
+                                class="w-7 h-7 text-xs rounded-lg transition-colors flex items-center justify-center"
+                                :class="p === currentPage ? 'bg-blue-600 text-white font-bold shadow-xs' : 'text-slate-600 hover:bg-slate-100 font-medium'">
+                                {{ p }}
+                            </button>
+                        </div>
                         <button @click="currentPage++" :disabled="currentPage >= totalPages"
                             class="px-3 py-1.5 border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed font-medium transition-colors">
                             Selanjutnya
@@ -480,7 +518,7 @@ const exportCSV = () => {
                 <div class="flex items-start justify-between border-b border-slate-100 pb-4 mb-4">
                     <div>
                         <div class="flex items-center gap-2">
-                            <span class="w-6 h-6 rounded-md bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-xs">❄</span>
+                            <img src="/images/logo-premium.png" alt="Logo-Premium" class="w-8 h-8">
                             <h3 class="text-base font-bold text-slate-900">Estimasi Slip Gaji Karyawan</h3>
                         </div>
                         <p class="text-xs text-slate-500 mt-1">Periode 1 - 31 Oktober 2026 (Estimasi per 9 Oktober)</p>

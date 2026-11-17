@@ -28,7 +28,7 @@ const selectRole = (role) => {
     if (role === 'admin') {
         form.email = 'admin@eskristal.com';
     } else {
-        form.email = 'PDX-001';
+        form.email = 'PRD-001';
     }
 };
 
@@ -177,7 +177,7 @@ const submit = () => {
                                     </svg>
                                 </div>
                                 <input id="email" v-model="form.email" type="text" required autofocus autocomplete="username"
-                                    :placeholder="selectedRole === 'karyawan' ? 'Contoh: PDX-001' : 'admin@eskristal.com'"
+                                    :placeholder="selectedRole === 'karyawan' ? 'Contoh: PRD-001' : 'admin@eskristal.com'"
                                     class="w-full pl-10 pr-4 py-2.5 text-xs border border-slate-200 rounded-xl bg-slate-50/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all font-medium text-slate-800">
                             </div>
                             <p v-if="form.errors.email" class="text-rose-500 text-[11px] mt-1">{{ form.errors.email }}</p>

@@ -57,6 +57,11 @@ const locationMessage = ref('Lokasi belum diperiksa');
 const locationSubMessage = ref('Klik tombol "Periksa Lokasi GPS" di bawah untuk memverifikasi area.');
 
 const checkLocation = () => {
+    if (!currentEmployee.value?.isActive) {
+        alert('Akun Anda berstatus Nonaktif. Presensi dinonaktifkan oleh administrator.');
+        return;
+    }
+
     if (!navigator.geolocation) {
         alert('Geolocation tidak didukung oleh browser Anda.');
         return;
@@ -125,6 +130,11 @@ const cameraError = ref(null);
 const capturedPhoto = ref(null);
 
 const startCamera = async () => {
+    if (!currentEmployee.value?.isActive) {
+        triggerToast('Akun Anda berstatus Nonaktif.');
+        return;
+    }
+
     // SYARAT MUTLAK: Harus di dalam radius pabrik terlebih dahulu!
     if (!locationChecked.value || !inRadius.value) {
         triggerToast('Pemeriksaan lokasi wajib lulus terlebih dahulu sebelum kamera dapat digunakan.');
@@ -247,6 +257,14 @@ const attendanceStatusBadge = computed(() => {
 });
 
 const doClockIn = () => {
+    if (!currentEmployee.value?.isActive) {
+        alert('Akun Anda dinonaktifkan oleh administrator. Anda tidak dapat melakukan absensi.');
+        return;
+    }
+    if (hasCheckedIn.value) {
+        alert('Anda sudah melakukan absensi masuk hari ini!');
+        return;
+    }
     if (!locationChecked.value || !inRadius.value) {
         alert('Anda belum berada di dalam radius pabrik! Absensi hanya dapat dilakukan jika lokasi Anda sesuai dengan radius pabrik.');
         return;
@@ -269,6 +287,10 @@ const doClockIn = () => {
 };
 
 const doClockOut = () => {
+    if (!currentEmployee.value?.isActive) {
+        alert('Akun Anda dinonaktifkan oleh administrator. Anda tidak dapat melakukan absensi.');
+        return;
+    }
     if (!locationChecked.value || !inRadius.value) {
         alert('Anda belum berada di dalam radius pabrik! Absen pulang hanya dapat dilakukan jika lokasi Anda berada di dalam radius pabrik.');
         return;
@@ -296,6 +318,19 @@ const doClockOut = () => {
                 <span class="text-sm font-medium">{{ toastMessage }}</span>
             </div>
 
+            <!-- Inactive Employee Alert Banner -->
+            <div v-if="!currentEmployee.isActive" class="p-5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 flex items-start gap-3.5 shadow-xs">
+                <div class="w-10 h-10 rounded-xl bg-rose-100 flex items-center justify-center shrink-0 text-rose-600">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                </div>
+                <div>
+                    <h4 class="font-bold text-sm text-rose-900">Status Akun: Nonaktif</h4>
+                    <p class="text-xs text-rose-700 mt-1 leading-relaxed">
+                        Akun Anda saat ini dinonaktifkan oleh administrator. Akses presensi mandiri, kamera, dan perolehan poin kehadiran ditangguhkan. Silakan hubungi bagian HRD atau Admin untuk informasi pengaktifan kembali.
+                    </p>
+                </div>
+            </div>
+
             <!-- Page Header -->
             <div class="flex items-center justify-between">
                 <div>
@@ -306,22 +341,29 @@ const doClockOut = () => {
                 </div>
                 <span class="px-3 py-1 text-xs font-semibold rounded-md border"
                     :class="{
-                        'bg-emerald-50 text-emerald-700 border-emerald-200': hasCheckedOut,
-                        'bg-sky-50 text-sky-700 border-sky-200': hasCheckedIn && !hasCheckedOut,
-                        'bg-amber-50 text-amber-700 border-amber-200': !hasCheckedIn,
+                        'bg-slate-100 text-slate-500 border-slate-200': !currentEmployee.isActive,
+                        'bg-emerald-50 text-emerald-700 border-emerald-200': currentEmployee.isActive && hasCheckedOut,
+                        'bg-sky-50 text-sky-700 border-sky-200': currentEmployee.isActive && hasCheckedIn && !hasCheckedOut,
+                        'bg-amber-50 text-amber-700 border-amber-200': currentEmployee.isActive && !hasCheckedIn,
                     }">
-                    {{ attendanceStatusBadge }}
+                    {{ !currentEmployee.isActive ? 'Nonaktif' : attendanceStatusBadge }}
                 </span>
             </div>
 
             <!-- Main Attendance Card -->
-            <div class="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 max-w-4xl shadow-xs">
+            <div class="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 max-w-4xl shadow-xs"
+                :class="!currentEmployee.isActive ? 'opacity-70 pointer-events-none select-none' : ''">
                 
                 <!-- Card Header -->
                 <div class="flex items-start justify-between mb-4">
                     <div>
-                        <h2 class="text-lg font-bold text-slate-900">Presensi hari ini</h2>
-                        <p class="text-xs text-slate-500 mt-0.5">{{ currentEmployee.name }} • Divisi {{ currentEmployee.division }}</p>
+                        <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+                            <span>Presensi hari ini</span>
+                            <span v-if="!currentEmployee.isActive" class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-700">
+                                Nonaktif
+                            </span>
+                        </h2>
+                        <p class="text-xs text-slate-500 mt-0.5">{{ currentEmployee.name }} • Divisi {{ currentEmployee.division }} ({{ currentEmployee.id }})</p>
                     </div>
                     <span class="text-xs font-semibold px-2.5 py-1 rounded-md border"
                         :class="{
