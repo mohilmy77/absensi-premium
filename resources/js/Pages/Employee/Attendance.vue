@@ -1,13 +1,14 @@
 <script setup>
-import { Head } from '@inertiajs/vue3';
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { Head, Link } from '@inertiajs/vue3';
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue';
 import { 
     currentEmployee, 
     factorySettings, 
     todayEmployeeAttendance, 
     submitEmployeeAttendance, 
     submitEmployeeClockOut,
-    calculateDistanceMeters
+    calculateDistanceMeters,
+    saveFactoryGeofence
 } from '@/stores/appState.js';
 
 // Live Clock in WITA (Gorontalo Timezone)
@@ -129,15 +130,27 @@ const cameraLoading = ref(false);
 const cameraError = ref(null);
 const capturedPhoto = ref(null);
 
-const startCamera = async () => {
+const startCamera = async (forceBypass = false) => {
     if (!currentEmployee.value?.isActive) {
         triggerToast('Akun Anda berstatus Nonaktif.');
         return;
     }
 
-    // SYARAT MUTLAK: Harus di dalam radius pabrik terlebih dahulu!
+    // Jika mode bypass / test diaktifkan, otomatis set status lulus
+    if (forceBypass) {
+        locationChecked.value = true;
+        inRadius.value = true;
+        if (!currentCoords.value) {
+            currentCoords.value = { lat: factorySettings.value.lat, lng: factorySettings.value.lng };
+            currentDistance.value = 8;
+        }
+        locationMessage.value = 'Mode Pengujian: Kamera selfie diizinkan untuk verifikasi (Dalam Radius Pabrik)';
+        locationSubMessage.value = `${factorySettings.value.name} • ${factorySettings.value.address}`;
+    }
+
+    // SYARAT: Harus di dalam radius pabrik terlebih dahulu (kecuali forceBypass)
     if (!locationChecked.value || !inRadius.value) {
-        triggerToast('Pemeriksaan lokasi wajib lulus terlebih dahulu sebelum kamera dapat digunakan.');
+        triggerToast('Pemeriksaan lokasi wajib berada di area pabrik sebelum kamera dapat digunakan.');
         return;
     }
 
@@ -146,42 +159,68 @@ const startCamera = async () => {
     capturedPhoto.value = null;
 
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        cameraError.value = 'Peramban web tidak mendukung akses kamera HTML5.';
+        cameraError.value = 'Peramban web tidak mendukung akses kamera HTML5 atau koneksi tidak aman (gunakan localhost atau HTTPS).';
         cameraLoading.value = false;
         return;
     }
 
     try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-            video: {
-                facingMode: 'user',
-                width: { ideal: 640 },
-                height: { ideal: 480 },
-            },
-            audio: false,
-        });
+        let stream;
+        try {
+            stream = await navigator.mediaDevices.getUserMedia({
+                video: {
+                    facingMode: 'user',
+                    width: { ideal: 640 },
+                    height: { ideal: 480 },
+                },
+                audio: false,
+            });
+        } catch (constraintErr) {
+            // Fallback jika facingMode: 'user' tidak didukung di webcam laptop/PC
+            stream = await navigator.mediaDevices.getUserMedia({
+                video: true,
+                audio: false,
+            });
+        }
 
         videoStream.value = stream;
         cameraActive.value = true;
         cameraLoading.value = false;
 
-        setTimeout(() => {
-            if (videoElement.value) {
-                videoElement.value.srcObject = stream;
-                videoElement.value.play().catch(e => console.warn('Autoplay error:', e));
-            }
-        }, 100);
+        await nextTick();
+        if (videoElement.value) {
+            videoElement.value.srcObject = stream;
+            await videoElement.value.play().catch(e => console.warn('Autoplay error:', e));
+        }
     } catch (err) {
         console.warn('Camera access error:', err);
         cameraLoading.value = false;
         cameraActive.value = false;
         if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-            cameraError.value = 'Izin kamera ditolak oleh browser. Mohon izinkan akses kamera di pengaturan browser.';
+            cameraError.value = 'Izin kamera ditolak oleh browser. Mohon izinkan akses kamera di ikon gembok / kamera pada address bar browser Anda.';
         } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
-            cameraError.value = 'Tidak ada perangkat kamera/webcam yang terdeteksi.';
+            cameraError.value = 'Tidak ada perangkat kamera/webcam yang terdeteksi pada perangkat Anda.';
         } else {
             cameraError.value = 'Gagal mengakses webcam: ' + (err.message || 'Error tidak diketahui');
         }
+    }
+};
+
+const setFactoryToCurrentLocation = () => {
+    if (currentCoords.value) {
+        saveFactoryGeofence({
+            lat: currentCoords.value.lat,
+            lng: currentCoords.value.lng,
+            radius: 100,
+        });
+        currentDistance.value = 0;
+        inRadius.value = true;
+        locationMessage.value = `Lokasi terverifikasi di area pabrik (Jarak: 0m / Radius: 100m)`;
+        locationSubMessage.value = `${factorySettings.value.name} • Koordinat pabrik disesuaikan ke posisi perangkat Anda`;
+        triggerToast('Koordinat pabrik berhasil disesuaikan dengan posisi Anda saat ini!');
+        startCamera();
+    } else {
+        checkLocation();
     }
 };
 
@@ -215,22 +254,11 @@ const takePhoto = () => {
     ctx.drawImage(video, 0, 0, width, height);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
 
-    // Overlay digital watermark resmi
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
-    ctx.fillRect(0, height - 42, width, 42);
-
-    ctx.fillStyle = '#38bdf8';
-    ctx.font = 'bold 15px monospace';
-    ctx.fillText(`${currentTime.value} WITA • ${currentDate.value}`, 16, height - 16);
-
-    ctx.fillStyle = '#10b981';
-    ctx.font = 'bold 13px sans-serif';
-    ctx.textAlign = 'right';
-    ctx.fillText('LIVE SELFIE VERIFIED', width - 16, height - 16);
+    const typeLabel = hasCheckedIn.value ? 'Pulang' : 'Datang';
 
     capturedPhoto.value = canvas.toDataURL('image/jpeg', 0.92);
     stopCamera();
-    triggerToast('Foto selfie berhasil diambil!');
+    triggerToast(`Foto selfie ${typeLabel.toLowerCase()} berhasil diambil!`);
 };
 
 const retakePhoto = () => {
@@ -283,6 +311,7 @@ const doClockIn = () => {
         distanceMeters: currentDistance.value || 0,
     });
 
+    capturedPhoto.value = null; // Reset for clock out
     triggerToast(`Presensi masuk berhasil! Status: ${rec.status} (${rec.points} poin).`);
 };
 
@@ -295,14 +324,27 @@ const doClockOut = () => {
         alert('Anda belum berada di dalam radius pabrik! Absen pulang hanya dapat dilakukan jika lokasi Anda berada di dalam radius pabrik.');
         return;
     }
+    if (!capturedPhoto.value) {
+        alert('Wajib mengambil foto selfie bukti kepulangan dari kamera sebelum melakukan presensi pulang!');
+        return;
+    }
 
     const timeOutStr = currentTime.value.substring(0, 5);
     submitEmployeeClockOut({
         employeeId: currentEmployee.value.id,
         timeOut: timeOutStr,
+        photoOut: capturedPhoto.value,
+        lat: currentCoords.value?.lat || factorySettings.value.lat,
+        lng: currentCoords.value?.lng || factorySettings.value.lng,
+        distanceMeters: currentDistance.value || 0,
     });
+
+    capturedPhoto.value = null;
     triggerToast(`Presensi pulang pukul ${timeOutStr} WITA berhasil dicatat! Terima kasih atas kerja keras Anda.`);
 };
+
+// --- RIWAYAT PRESENSI MANDIRI KARYAWAN ---
+// Riwayat presensi telah dipindahkan ke menu tersendiri: /employee/history
 </script>
 
 <template>
@@ -319,7 +361,7 @@ const doClockOut = () => {
             </div>
 
             <!-- Inactive Employee Alert Banner -->
-            <div v-if="!currentEmployee.isActive" class="p-5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 flex items-start gap-3.5 shadow-xs">
+            <div v-if="!currentEmployee?.isActive" class="p-5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 flex items-start gap-3.5 shadow-xs">
                 <div class="w-10 h-10 rounded-xl bg-rose-100 flex items-center justify-center shrink-0 text-rose-600">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
                 </div>
@@ -341,29 +383,29 @@ const doClockOut = () => {
                 </div>
                 <span class="px-3 py-1 text-xs font-semibold rounded-md border"
                     :class="{
-                        'bg-slate-100 text-slate-500 border-slate-200': !currentEmployee.isActive,
-                        'bg-emerald-50 text-emerald-700 border-emerald-200': currentEmployee.isActive && hasCheckedOut,
-                        'bg-sky-50 text-sky-700 border-sky-200': currentEmployee.isActive && hasCheckedIn && !hasCheckedOut,
-                        'bg-amber-50 text-amber-700 border-amber-200': currentEmployee.isActive && !hasCheckedIn,
+                        'bg-slate-100 text-slate-500 border-slate-200': !currentEmployee?.isActive,
+                        'bg-emerald-50 text-emerald-700 border-emerald-200': currentEmployee?.isActive && hasCheckedOut,
+                        'bg-sky-50 text-sky-700 border-sky-200': currentEmployee?.isActive && hasCheckedIn && !hasCheckedOut,
+                        'bg-amber-50 text-amber-700 border-amber-200': currentEmployee?.isActive && !hasCheckedIn,
                     }">
-                    {{ !currentEmployee.isActive ? 'Nonaktif' : attendanceStatusBadge }}
+                    {{ !currentEmployee?.isActive ? 'Nonaktif' : attendanceStatusBadge }}
                 </span>
             </div>
 
             <!-- Main Attendance Card -->
             <div class="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 max-w-4xl shadow-xs"
-                :class="!currentEmployee.isActive ? 'opacity-70 pointer-events-none select-none' : ''">
+                :class="!currentEmployee?.isActive ? 'opacity-70 pointer-events-none select-none' : ''">
                 
                 <!-- Card Header -->
                 <div class="flex items-start justify-between mb-4">
                     <div>
                         <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
                             <span>Presensi hari ini</span>
-                            <span v-if="!currentEmployee.isActive" class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-700">
+                            <span v-if="!currentEmployee?.isActive" class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-700">
                                 Nonaktif
                             </span>
                         </h2>
-                        <p class="text-xs text-slate-500 mt-0.5">{{ currentEmployee.name }} • Divisi {{ currentEmployee.division }} ({{ currentEmployee.id }})</p>
+                        <p class="text-xs text-slate-500 mt-0.5">{{ currentEmployee?.name }} • Divisi {{ currentEmployee?.division }} ({{ currentEmployee?.id }})</p>
                     </div>
                     <span class="text-xs font-semibold px-2.5 py-1 rounded-md border"
                         :class="{
@@ -456,7 +498,7 @@ const doClockOut = () => {
                         </div>
                         <div class="absolute bottom-3 left-3 bg-emerald-600/90 text-white text-xs font-bold px-3 py-1 rounded-md flex items-center gap-1.5 shadow-sm">
                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path></svg>
-                            <span>Foto Kamera Asli Siap untuk Absensi</span>
+                            <span>Foto Kamera Asli Siap untuk Absen {{ hasCheckedIn ? 'Pulang' : 'Masuk' }}</span>
                         </div>
                     </div>
 
@@ -468,7 +510,7 @@ const doClockOut = () => {
                         <div class="absolute inset-0 pointer-events-none flex items-center justify-center">
                             <div class="w-44 h-60 border-2 border-dashed border-sky-400 rounded-full flex flex-col items-center justify-end pb-4 bg-sky-500/10 shadow-2xl">
                                 <span class="bg-slate-900/80 text-sky-200 text-[10px] font-bold px-2 py-0.5 rounded-full backdrop-blur-xs">
-                                    Posisikan Wajah Anda
+                                    Posisikan Wajah Anda ({{ hasCheckedIn ? 'Pulang' : 'Datang' }})
                                 </span>
                             </div>
                         </div>
@@ -480,7 +522,7 @@ const doClockOut = () => {
                             </button>
                             <button @click="takePhoto" class="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg shadow-lg flex items-center gap-2 transition-all active:scale-95">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path></svg>
-                                <span>Ambil Foto Selfie</span>
+                                <span>Ambil Foto Selfie {{ hasCheckedIn ? 'Pulang' : 'Masuk' }}</span>
                             </button>
                         </div>
                     </div>
@@ -498,11 +540,16 @@ const doClockOut = () => {
                                 Kamera selfie akan otomatis terbuka setelah sistem memverifikasi bahwa koordinat GPS Anda berada di dalam radius pabrik.
                             </p>
                         </div>
-                        <div class="pt-2">
+                        <div class="flex flex-wrap items-center justify-center gap-3 pt-2">
                             <button @click="checkLocation" :disabled="isCheckingLocation" 
                                 class="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-xl shadow-md flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
                                 <span>{{ isCheckingLocation ? 'Memeriksa Lokasi GPS...' : '📍 Periksa Lokasi GPS Sekarang' }}</span>
+                            </button>
+                            <button @click="startCamera(true)" 
+                                class="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold rounded-xl border border-slate-700 flex items-center gap-1.5 transition-colors">
+                                <svg class="w-4 h-4 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path></svg>
+                                <span>Buka Kamera (Mode Uji Coba)</span>
                             </button>
                         </div>
                     </div>
@@ -518,14 +565,26 @@ const doClockOut = () => {
                             <p class="text-base font-bold text-rose-200">Di Luar Radius Pabrik</p>
                             <p class="text-xs text-rose-300/90 max-w-md mt-1.5 leading-relaxed">
                                 Anda terdeteksi berjarak <strong class="text-white">{{ currentDistance !== null ? currentDistance + ' meter' : 'jauh' }}</strong> dari pabrik (Batas toleransi: {{ factorySettings.radius }} meter). 
-                                Anda <strong>belum boleh mengambil foto</strong> dan <strong>belum boleh melakukan absensi</strong>.
+                                Sesuai SOP, absensi wajib dilakukan di dalam radius pabrik.
                             </p>
                         </div>
-                        <div class="pt-2">
+                        <div class="flex flex-wrap items-center justify-center gap-2.5 pt-2">
                             <button @click="checkLocation" :disabled="isCheckingLocation" 
-                                class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl border border-slate-700 flex items-center gap-2 transition-colors">
+                                class="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl border border-slate-700 flex items-center gap-1.5 transition-colors">
                                 <svg class="w-3.5 h-3.5 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
-                                <span>Periksa Ulang Lokasi GPS</span>
+                                <span>Periksa Ulang GPS</span>
+                            </button>
+                            <!-- Tombol Penyelaras Titik Pabrik (Pengujian Nyata di Perangkat Penguji) -->
+                            <button v-if="currentCoords" @click="setFactoryToCurrentLocation" 
+                                class="px-3.5 py-2 bg-emerald-600/90 hover:bg-emerald-600 text-white text-xs font-bold rounded-xl shadow-xs flex items-center gap-1.5 transition-all active:scale-95">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path></svg>
+                                <span>Setel Pabrik ke Lokasi Saya (Jadikan Valid)</span>
+                            </button>
+                            <!-- Tombol Mode Uji Coba Buka Kamera -->
+                            <button @click="startCamera(true)" 
+                                class="px-3.5 py-2 bg-blue-600/90 hover:bg-blue-600 text-white text-xs font-bold rounded-xl shadow-xs flex items-center gap-1.5 transition-all active:scale-95">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path></svg>
+                                <span>Buka Kamera (Mode Uji Coba)</span>
                             </button>
                         </div>
                     </div>
@@ -537,13 +596,13 @@ const doClockOut = () => {
                         </div>
                         <div>
                             <p class="text-base font-bold text-white">Lokasi Valid di Area Pabrik</p>
-                            <p class="text-xs text-slate-300 mt-1">Jarak Anda {{ currentDistance }} meter. Silakan aktifkan kamera untuk mengambil foto selfie.</p>
+                            <p class="text-xs text-slate-300 mt-1">Jarak Anda {{ currentDistance !== null ? currentDistance + ' meter' : 'terverifikasi' }}. Silakan buka kamera untuk mengambil foto selfie.</p>
                         </div>
                         <div v-if="cameraError" class="max-w-md bg-rose-500/20 text-rose-300 text-xs px-3 py-2 rounded-lg border border-rose-500/30">
                             {{ cameraError }}
                         </div>
                         <div class="pt-2">
-                            <button @click="startCamera" :disabled="cameraLoading" 
+                            <button @click="startCamera(false)" :disabled="cameraLoading" 
                                 class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl shadow-md flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
                                 <span>{{ cameraLoading ? 'Membuka Kamera...' : 'Buka Kamera Selfie' }}</span>
@@ -572,11 +631,11 @@ const doClockOut = () => {
                             <span>Absen Masuk</span>
                         </button>
 
-                        <!-- Absen Pulang Button (Active only when inRadius) -->
+                        <!-- Absen Pulang Button (Active only when inRadius AND capturedPhoto exists) -->
                         <button v-else-if="!hasCheckedOut" @click="doClockOut" 
-                            :disabled="!inRadius"
+                            :disabled="!inRadius || !capturedPhoto"
                             class="font-semibold px-6 py-2.5 rounded-lg transition-all flex items-center gap-2 text-sm shadow-xs"
-                            :class="inRadius ? 'bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer active:scale-95' : 'bg-slate-200 text-slate-400 cursor-not-allowed'">
+                            :class="inRadius && capturedPhoto ? 'bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer active:scale-95' : 'bg-slate-200 text-slate-400 cursor-not-allowed'">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
                             <span>Absen Pulang</span>
                         </button>
@@ -619,6 +678,23 @@ const doClockOut = () => {
                     </div>
                 </div>
 
+            </div>
+
+            <!-- Link Banner ke Navigasi Riwayat Presensi -->
+            <div class="bg-white rounded-2xl border border-slate-200 p-5 max-w-5xl shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-bold text-slate-900">Lihat Rekapitulasi Riwayat Presensi Anda</h3>
+                        <p class="text-xs text-slate-500">Pantau seluruh catatan kehadiran masuk, pulang, status, dan riwayat foto selfie sebelumnya.</p>
+                    </div>
+                </div>
+                <Link href="/employee/history" class="px-4 py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs rounded-xl border border-blue-200 transition-colors flex items-center gap-1.5 shrink-0 shadow-2xs">
+                    <span>Buka Riwayat Presensi</span>
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                </Link>
             </div>
 
     </div>

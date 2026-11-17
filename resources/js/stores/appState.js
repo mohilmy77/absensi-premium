@@ -12,8 +12,26 @@ if (typeof window !== 'undefined') {
 }
 
 // Sample SVG selfie data generator untuk preview absensi karyawan
-export const createSampleSelfie = (name, time = '07:48', isVerified = true) => {
-    const initials = name.split(' ').map(n => n[0]).slice(0, 2).join('');
+export const createSampleSelfie = (
+    name, 
+    time = '07:48', 
+    isVerified = true, 
+    type = 'Datang', 
+    lat = 0.539716, 
+    lng = 123.058278, 
+    date = '09/11/2026'
+) => {
+    const initials = name.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase();
+    
+    // Format date jika ISO YYYY-MM-DD menjadi DD/MM/YYYY
+    let formattedDate = date;
+    if (date && date.includes('-')) {
+        const parts = date.split('-');
+        if (parts.length === 3) {
+            formattedDate = `${parts[2]}/${parts[1]}/${parts[0]}`;
+        }
+    }
+
     const svg = `
     <svg xmlns="http://www.w3.org/2000/svg" width="480" height="360" viewBox="0 0 480 360">
         <defs>
@@ -29,36 +47,28 @@ export const createSampleSelfie = (name, time = '07:48', isVerified = true) => {
         <rect width="480" height="360" fill="url(#bg)" />
         
         <!-- Factory background elements -->
-        <rect x="30" y="40" width="80" height="220" fill="#334155" opacity="0.4" rx="4" />
-        <rect x="370" y="50" width="80" height="210" fill="#334155" opacity="0.4" rx="4" />
+        <rect x="30" y="30" width="80" height="190" fill="#334155" opacity="0.4" rx="4" />
+        <rect x="370" y="40" width="80" height="180" fill="#334155" opacity="0.4" rx="4" />
         
         <!-- Person Body -->
-        <path d="M 120 360 C 130 250, 170 230, 240 230 C 310 230, 350 250, 360 360 Z" fill="url(#uniform)" />
+        <path d="M 90 360 L 110 320 C 125 240, 165 210, 240 210 C 315 210, 355 240, 370 320 L 390 360 Z" fill="url(#uniform)" />
         <!-- Reflective safety vest stripes -->
-        <rect x="175" y="245" width="22" height="115" fill="#22c55e" opacity="0.9" rx="2" />
-        <rect x="283" y="245" width="22" height="115" fill="#22c55e" opacity="0.9" rx="2" />
+        <rect x="180" y="225" width="20" height="135" fill="#22c55e" opacity="0.9" rx="2" />
+        <rect x="280" y="225" width="20" height="135" fill="#22c55e" opacity="0.9" rx="2" />
         
         <!-- Face -->
-        <ellipse cx="240" cy="165" rx="60" ry="72" fill="#fed7aa" />
+        <ellipse cx="240" cy="145" rx="55" ry="66" fill="#fed7aa" />
         <!-- Safety Helmet (Blue) -->
-        <path d="M 168 135 C 172 70, 308 70, 312 135 Z" fill="#0284c7" />
-        <rect x="156" y="130" width="168" height="14" rx="5" fill="#0369a1" />
-        <circle cx="240" cy="100" r="12" fill="#38bdf8" />
+        <path d="M 174 118 C 178 58, 302 58, 306 118 Z" fill="#0284c7" />
+        <rect x="162" y="114" width="156" height="13" rx="4" fill="#0369a1" />
+        <circle cx="240" cy="86" r="11" fill="#38bdf8" />
         
         <!-- Face oval recognition guide -->
-        <ellipse cx="240" cy="170" rx="90" ry="115" fill="none" stroke="#38bdf8" stroke-width="2" stroke-dasharray="8 6" opacity="0.75" />
+        <ellipse cx="240" cy="150" rx="80" ry="100" fill="none" stroke="#38bdf8" stroke-width="2" stroke-dasharray="6 4" opacity="0.6" />
         
         <!-- Name Initials Badge -->
-        <circle cx="240" cy="180" r="28" fill="#1e293b" opacity="0.8" />
-        <text x="240" y="188" font-family="sans-serif" font-size="20" font-weight="bold" fill="#ffffff" text-anchor="middle">${initials}</text>
-
-        <!-- Bottom verification banner -->
-        <rect x="0" y="315" width="480" height="45" fill="rgba(15, 23, 42, 0.9)" />
-        <circle cx="24" cy="337" r="6" fill="${isVerified ? '#10b981' : '#f59e0b'}" />
-        <text x="38" y="341" font-family="sans-serif" font-size="13" font-weight="bold" fill="#ffffff">${name}</text>
-        <text x="260" y="341" font-family="monospace" font-size="12" font-weight="bold" fill="#38bdf8">${time} WITA • GPS VERIFIED</text>
-        <rect x="400" y="325" width="65" height="24" rx="4" fill="${isVerified ? '#10b981' : '#f59e0b'}" />
-        <text x="432" y="341" font-family="sans-serif" font-size="10" font-weight="bold" fill="#ffffff" text-anchor="middle">VALID</text>
+        <circle cx="240" cy="160" r="24" fill="#1e293b" opacity="0.85" />
+        <text x="240" y="167" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="17" font-weight="bold" fill="#ffffff" text-anchor="middle">${initials}</text>
     </svg>`;
     return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg.trim());
 };
@@ -157,49 +167,47 @@ const DEFAULT_GEOFENCING = {
     timezone: 'WITA (UTC+8)',
 };
 
-// Initial default attendance records
+// Helper generate relative date string (YYYY-MM-DD)
+const getRelativeDateStr = (offsetDays = 0) => {
+    const d = new Date();
+    d.setDate(d.getDate() - offsetDays);
+    return d.toISOString().split('T')[0];
+};
+
+const dateToday = getRelativeDateStr(0);
+const dateYesterday = getRelativeDateStr(1);
+const date2DaysAgo = getRelativeDateStr(2);
+const date3DaysAgo = getRelativeDateStr(3);
+const date5DaysAgo = getRelativeDateStr(5);
+const date10DaysAgo = getRelativeDateStr(10);
+
+// Initial default attendance records (Hari ini, Kemarin, dan Riwayat Lampau)
 const DEFAULT_ATTENDANCE = [
+    // --- HARI INI ---
     {
-        id: 'ATT-20261009-001',
-        employeeId: 'PRD-001',
-        name: 'Rahmat Malango',
-        division: 'Produksi',
-        shift: 'Shift 1',
-        date: '2026-10-09',
-        timeIn: '07:48',
-        timeOut: '17:05',
-        status: 'Tepat waktu',
-        points: '+30',
-        lat: 0.539720,
-        lng: 123.058282,
-        distanceMeters: 8,
-        photo: createSampleSelfie('Rahmat Malango', '07:48'),
-        notes: 'Hadir shift 1 di pabrik Jl. Imam Bonjol',
-    },
-    {
-        id: 'ATT-20261009-002',
+        id: `ATT-${dateToday.replace(/-/g, '')}-001`,
         employeeId: 'PRD-002',
         name: 'Zul Ismail',
         division: 'Produksi',
         shift: 'Shift 1',
-        date: '2026-10-09',
-        timeIn: '07:52',
+        date: dateToday,
+        timeIn: '07:50',
         timeOut: '17:00',
         status: 'Tepat waktu',
         points: '+30',
         lat: 0.539718,
         lng: 123.058275,
         distanceMeters: 5,
-        photo: createSampleSelfie('Zul Ismail', '07:52'),
+        photo: createSampleSelfie('Zul Ismail', '07:50'),
         notes: 'Absen masuk tepat waktu di area pabrik',
     },
     {
-        id: 'ATT-20261009-003',
+        id: `ATT-${dateToday.replace(/-/g, '')}-002`,
         employeeId: 'KSR-001',
         name: 'Silfana Didipu',
         division: 'Kasir',
         shift: 'Shift 1',
-        date: '2026-10-09',
+        date: dateToday,
         timeIn: '08:12',
         timeOut: '-',
         status: 'Terlambat',
@@ -208,15 +216,15 @@ const DEFAULT_ATTENDANCE = [
         lng: 123.058290,
         distanceMeters: 21,
         photo: createSampleSelfie('Silfana Didipu', '08:12'),
-        notes: 'Terlambat 12 menit karena hujan',
+        notes: 'Terlambat 12 menit karena hujan lebat',
     },
     {
-        id: 'ATT-20261009-004',
+        id: `ATT-${dateToday.replace(/-/g, '')}-003`,
         employeeId: 'SPV-001',
         name: 'Ambarak Ammarie',
         division: 'Supervisor',
         shift: 'Shift 1',
-        date: '2026-10-09',
+        date: dateToday,
         timeIn: '07:55',
         timeOut: '17:10',
         status: 'Tepat waktu',
@@ -225,15 +233,15 @@ const DEFAULT_ATTENDANCE = [
         lng: 123.058280,
         distanceMeters: 4,
         photo: createSampleSelfie('Ambarak Ammarie', '07:55'),
-        notes: 'Hadir tepat waktu',
+        notes: 'Hadir tepat waktu dan buka operasional',
     },
     {
-        id: 'ATT-20261009-005',
+        id: `ATT-${dateToday.replace(/-/g, '')}-004`,
         employeeId: 'PRD-003',
         name: 'Zulfikar Umasugi',
         division: 'Produksi',
         shift: 'Shift 1',
-        date: '2026-10-09',
+        date: dateToday,
         timeIn: '-',
         timeOut: '-',
         status: 'Izin disetujui',
@@ -245,12 +253,12 @@ const DEFAULT_ATTENDANCE = [
         notes: 'Izin urusan keluarga mendesak disetujui Supervisor',
     },
     {
-        id: 'ATT-20261009-006',
+        id: `ATT-${dateToday.replace(/-/g, '')}-005`,
         employeeId: 'DRV-001',
         name: 'Ramdan Ahmad',
         division: 'Driver',
         shift: 'Shift 1',
-        date: '2026-10-09',
+        date: dateToday,
         timeIn: '08:24',
         timeOut: '-',
         status: 'Terlambat',
@@ -260,6 +268,237 @@ const DEFAULT_ATTENDANCE = [
         distanceMeters: 36,
         photo: createSampleSelfie('Ramdan Ahmad', '08:24'),
         notes: 'Pengiriman es pagi terlambat datang',
+    },
+
+    // --- KEMARIN ---
+    {
+        id: `ATT-${dateYesterday.replace(/-/g, '')}-001`,
+        employeeId: 'PRD-001',
+        name: 'Rahmat Malango',
+        division: 'Produksi',
+        shift: 'Shift 1',
+        date: dateYesterday,
+        timeIn: '07:48',
+        timeOut: '17:05',
+        status: 'Tepat waktu',
+        points: '+30',
+        lat: 0.539720,
+        lng: 123.058282,
+        distanceMeters: 8,
+        photo: createSampleSelfie('Rahmat Malango', '07:48'),
+        notes: 'Presensi shift 1 lengkap',
+    },
+    {
+        id: `ATT-${dateYesterday.replace(/-/g, '')}-002`,
+        employeeId: 'PRD-002',
+        name: 'Zul Ismail',
+        division: 'Produksi',
+        shift: 'Shift 1',
+        date: dateYesterday,
+        timeIn: '07:55',
+        timeOut: '17:00',
+        status: 'Tepat waktu',
+        points: '+30',
+        lat: 0.539718,
+        lng: 123.058275,
+        distanceMeters: 5,
+        photo: createSampleSelfie('Zul Ismail', '07:55'),
+        notes: 'Hadir tepat waktu',
+    },
+    {
+        id: `ATT-${dateYesterday.replace(/-/g, '')}-003`,
+        employeeId: 'KSR-001',
+        name: 'Silfana Didipu',
+        division: 'Kasir',
+        shift: 'Shift 1',
+        date: dateYesterday,
+        timeIn: '07:50',
+        timeOut: '17:00',
+        status: 'Tepat waktu',
+        points: '+30',
+        lat: 0.539722,
+        lng: 123.058280,
+        distanceMeters: 10,
+        photo: createSampleSelfie('Silfana Didipu', '07:50'),
+        notes: 'Hadir tepat waktu',
+    },
+    {
+        id: `ATT-${dateYesterday.replace(/-/g, '')}-004`,
+        employeeId: 'SPV-001',
+        name: 'Ambarak Ammarie',
+        division: 'Supervisor',
+        shift: 'Shift 1',
+        date: dateYesterday,
+        timeIn: '07:45',
+        timeOut: '17:15',
+        status: 'Tepat waktu',
+        points: '+30',
+        lat: 0.539715,
+        lng: 123.058280,
+        distanceMeters: 4,
+        photo: createSampleSelfie('Ambarak Ammarie', '07:45'),
+        notes: 'Hadir tepat waktu',
+    },
+    {
+        id: `ATT-${dateYesterday.replace(/-/g, '')}-005`,
+        employeeId: 'PRD-003',
+        name: 'Zulfikar Umasugi',
+        division: 'Produksi',
+        shift: 'Shift 1',
+        date: dateYesterday,
+        timeIn: '08:08',
+        timeOut: '17:00',
+        status: 'Terlambat',
+        points: '+20',
+        lat: 0.539725,
+        lng: 123.058285,
+        distanceMeters: 12,
+        photo: createSampleSelfie('Zulfikar Umasugi', '08:08'),
+        notes: 'Terlambat 8 menit',
+    },
+    {
+        id: `ATT-${dateYesterday.replace(/-/g, '')}-006`,
+        employeeId: 'DRV-001',
+        name: 'Ramdan Ahmad',
+        division: 'Driver',
+        shift: 'Shift 1',
+        date: dateYesterday,
+        timeIn: '07:40',
+        timeOut: '17:00',
+        status: 'Tepat waktu',
+        points: '+30',
+        lat: 0.539716,
+        lng: 123.058278,
+        distanceMeters: 3,
+        photo: createSampleSelfie('Ramdan Ahmad', '07:40'),
+        notes: 'Pengiriman tepat waktu',
+    },
+
+    // --- 2 HARI LALU ---
+    {
+        id: `ATT-${date2DaysAgo.replace(/-/g, '')}-001`,
+        employeeId: 'PRD-001',
+        name: 'Rahmat Malango',
+        division: 'Produksi',
+        shift: 'Shift 1',
+        date: date2DaysAgo,
+        timeIn: '07:42',
+        timeOut: '17:00',
+        status: 'Tepat waktu',
+        points: '+30',
+        lat: 0.539720,
+        lng: 123.058282,
+        distanceMeters: 7,
+        photo: createSampleSelfie('Rahmat Malango', '07:42'),
+        notes: 'Lembur shift sore 30 menit',
+    },
+    {
+        id: `ATT-${date2DaysAgo.replace(/-/g, '')}-002`,
+        employeeId: 'PRD-002',
+        name: 'Zul Ismail',
+        division: 'Produksi',
+        shift: 'Shift 1',
+        date: date2DaysAgo,
+        timeIn: '07:50',
+        timeOut: '17:00',
+        status: 'Tepat waktu',
+        points: '+30',
+        lat: 0.539718,
+        lng: 123.058275,
+        distanceMeters: 5,
+        photo: createSampleSelfie('Zul Ismail', '07:50'),
+        notes: 'Hadir tepat waktu',
+    },
+    {
+        id: `ATT-${date2DaysAgo.replace(/-/g, '')}-003`,
+        employeeId: 'DRV-001',
+        name: 'Ramdan Ahmad',
+        division: 'Driver',
+        shift: 'Shift 1',
+        date: date2DaysAgo,
+        timeIn: '07:35',
+        timeOut: '17:00',
+        status: 'Tepat waktu',
+        points: '+30',
+        lat: 0.539716,
+        lng: 123.058278,
+        distanceMeters: 3,
+        photo: createSampleSelfie('Ramdan Ahmad', '07:35'),
+        notes: 'Distribusi es rute barat lancar',
+    },
+
+    // --- 3 HARI LALU ---
+    {
+        id: `ATT-${date3DaysAgo.replace(/-/g, '')}-001`,
+        employeeId: 'PRD-001',
+        name: 'Rahmat Malango',
+        division: 'Produksi',
+        shift: 'Shift 1',
+        date: date3DaysAgo,
+        timeIn: '08:15',
+        timeOut: '17:00',
+        status: 'Terlambat',
+        points: '+20',
+        lat: 0.539725,
+        lng: 123.058285,
+        distanceMeters: 14,
+        photo: createSampleSelfie('Rahmat Malango', '08:15'),
+        notes: 'Terlambat 15 menit kendala ban motor',
+    },
+    {
+        id: `ATT-${date3DaysAgo.replace(/-/g, '')}-002`,
+        employeeId: 'PRD-003',
+        name: 'Zulfikar Umasugi',
+        division: 'Produksi',
+        shift: 'Shift 1',
+        date: date3DaysAgo,
+        timeIn: '-',
+        timeOut: '-',
+        status: 'Sakit',
+        points: '-',
+        lat: null,
+        lng: null,
+        distanceMeters: null,
+        photo: null,
+        notes: 'Surat dokter terlampir demam',
+    },
+
+    // --- 5 HARI LALU ---
+    {
+        id: `ATT-${date5DaysAgo.replace(/-/g, '')}-001`,
+        employeeId: 'KSR-001',
+        name: 'Silfana Didipu',
+        division: 'Kasir',
+        shift: 'Shift 1',
+        date: date5DaysAgo,
+        timeIn: '07:48',
+        timeOut: '17:00',
+        status: 'Tepat waktu',
+        points: '+30',
+        lat: 0.539720,
+        lng: 123.058280,
+        distanceMeters: 8,
+        photo: createSampleSelfie('Silfana Didipu', '07:48'),
+        notes: 'Hadir tepat waktu',
+    },
+
+    // --- 10 HARI LALU ---
+    {
+        id: `ATT-${date10DaysAgo.replace(/-/g, '')}-001`,
+        employeeId: 'SPV-001',
+        name: 'Ambarak Ammarie',
+        division: 'Supervisor',
+        shift: 'Shift 1',
+        date: date10DaysAgo,
+        timeIn: '07:50',
+        timeOut: '17:05',
+        status: 'Tepat waktu',
+        points: '+30',
+        lat: 0.539715,
+        lng: 123.058280,
+        distanceMeters: 4,
+        photo: createSampleSelfie('Ambarak Ammarie', '07:50'),
+        notes: 'Audit mingguan pabrik',
     },
 ];
 
@@ -275,7 +514,19 @@ const DEFAULT_SCHEDULES = {
 
 // --- REACTIVE STATE SINGLETON (Pure in-memory, resets on refresh) ---
 export const employees = ref(JSON.parse(JSON.stringify(DEFAULT_EMPLOYEES)));
-export const attendanceRecords = ref(JSON.parse(JSON.stringify(DEFAULT_ATTENDANCE)));
+export const attendanceRecords = ref(
+    JSON.parse(JSON.stringify(DEFAULT_ATTENDANCE)).map(att => {
+        const lat = att.lat || 0.539716;
+        const lng = att.lng || 123.058278;
+        if (!att.photo && !att.status.toLowerCase().includes('izin') && !att.status.toLowerCase().includes('sakit') && !att.status.toLowerCase().includes('alpa')) {
+            att.photo = createSampleSelfie(att.name, att.timeIn || '07:50', true, 'Datang', lat, lng, att.date);
+        }
+        if (att.timeOut && att.timeOut !== '-' && !att.photoOut) {
+            att.photoOut = createSampleSelfie(att.name, att.timeOut, true, 'Pulang', lat, lng, att.date);
+        }
+        return att;
+    })
+);
 export const factorySettings = ref({ ...DEFAULT_GEOFENCING });
 export const schedules = ref(JSON.parse(JSON.stringify(DEFAULT_SCHEDULES)));
 export const payrollAdjustments = ref({});
@@ -373,13 +624,17 @@ export const toggleEmployeeStatus = (id) => {
 
 // --- ATTENDANCE CRUD & ACTIONS ---
 export const addAttendanceRecord = (record) => {
+    const lat = record.lat || 0.539716;
+    const lng = record.lng || 123.058278;
+    const date = record.date || new Date().toISOString().split('T')[0];
+
     const newRecord = {
         id: record.id || `ATT-${Date.now()}`,
         employeeId: record.employeeId,
         name: record.name,
         division: record.division,
         shift: record.shift || 'Shift 1',
-        date: record.date || new Date().toISOString().split('T')[0],
+        date,
         timeIn: record.timeIn || '-',
         timeOut: record.timeOut || '-',
         status: record.status || 'Tepat waktu',
@@ -387,7 +642,8 @@ export const addAttendanceRecord = (record) => {
         lat: record.lat || null,
         lng: record.lng || null,
         distanceMeters: record.distanceMeters !== undefined ? record.distanceMeters : null,
-        photo: record.photo || (record.status.toLowerCase().includes('izin') || record.status.toLowerCase().includes('sakit') ? null : createSampleSelfie(record.name, record.timeIn)),
+        photo: record.photo || (record.status.toLowerCase().includes('izin') || record.status.toLowerCase().includes('sakit') || record.status.toLowerCase().includes('alpa') ? null : createSampleSelfie(record.name, record.timeIn || '07:50', true, 'Datang', lat, lng, date)),
+        photoOut: record.photoOut || (record.timeOut && record.timeOut !== '-' ? createSampleSelfie(record.name, record.timeOut, true, 'Pulang', lat, lng, date) : null),
         notes: record.notes || '',
         attachment: record.attachment || null,
     };
@@ -488,9 +744,11 @@ export const submitEmployeeAttendance = ({ employeeId, timeIn, photo, lat, lng, 
 };
 
 // Clock-out action
-export const submitEmployeeClockOut = ({ employeeId, timeOut }) => {
+export const submitEmployeeClockOut = ({ employeeId, timeOut, photoOut, lat, lng, distanceMeters }) => {
     const emp = employees.value.find(e => e.id === employeeId) || employees.value[0];
     const today = new Date().toISOString().split('T')[0];
+    const usedLat = lat || factorySettings.value.lat;
+    const usedLng = lng || factorySettings.value.lng;
 
     // Cek jika karyawan dinonaktifkan
     if (!emp.isActive) {
@@ -501,8 +759,14 @@ export const submitEmployeeClockOut = ({ employeeId, timeOut }) => {
         a => a.employeeId === emp.id && a.date === today
     );
 
+    const generatedPhotoOut = photoOut || createSampleSelfie(emp.name, timeOut, true, 'Pulang', usedLat, usedLng, today);
+
     if (record) {
         record.timeOut = timeOut;
+        record.photoOut = generatedPhotoOut;
+        if (lat) record.lat = lat;
+        if (lng) record.lng = lng;
+        if (distanceMeters !== undefined) record.distanceMeters = distanceMeters;
         return record;
     } else {
         return addAttendanceRecord({
@@ -515,6 +779,10 @@ export const submitEmployeeClockOut = ({ employeeId, timeOut }) => {
             timeOut,
             status: 'Tepat waktu',
             points: '+30',
+            photoOut: generatedPhotoOut,
+            lat: usedLat,
+            lng: usedLng,
+            distanceMeters,
             notes: 'Absen pulang mandiri via aplikasi',
         });
     }
@@ -579,6 +847,25 @@ export const todayEmployeeAttendance = computed(() => {
         a => a.employeeId === empId && a.date === today
     );
 });
+
+// --- ADMIN PROFILE STATE ---
+export const adminProfile = ref({
+    name: 'Admin Pabrik',
+    email: 'admin@eskristal.com',
+    role: 'Super Administrator',
+    avatar: 'AP',
+});
+
+export const updateAdminProfile = ({ name, email }) => {
+    if (name) {
+        adminProfile.value.name = name;
+        adminProfile.value.avatar = name.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase();
+    }
+    if (email) {
+        adminProfile.value.email = email;
+    }
+    return adminProfile.value;
+};
 
 // Calculate Haversine Distance in meters
 export const calculateDistanceMeters = (lat1, lon1, lat2, lon2) => {

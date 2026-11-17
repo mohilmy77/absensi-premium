@@ -1,5 +1,5 @@
 <script setup>
-import { Head } from '@inertiajs/vue3';
+import { Head, Link } from '@inertiajs/vue3';
 import { ref, computed } from 'vue';
 import { attendanceRecords, employees } from '@/stores/appState.js';
 
@@ -8,11 +8,12 @@ const selectedDivision = ref('Semua divisi');
 const divisions = ['Semua divisi', 'Produksi', 'Kasir', 'Supervisor', 'Driver'];
 
 const recentAttendances = computed(() => attendanceRecords.value);
+const activeEmployeesCount = computed(() => employees.value.filter(e => e.isActive).length);
 
 // Dynamic Metrics from store
 const countHadir = computed(() => attendanceRecords.value.filter(r => r.status === 'Tepat waktu' || r.status === 'Terlambat').length);
 const countTerlambat = computed(() => attendanceRecords.value.filter(r => r.status === 'Terlambat').length);
-const countIzinSakit = computed(() => attendanceRecords.value.filter(r => r.status.includes('Izin') || r.status.includes('Sakit') || r.status === 'Cuti').length);
+const countIzinSakit = computed(() => attendanceRecords.value.filter(r => r.status && (r.status.includes('Izin') || r.status.includes('Sakit') || r.status === 'Cuti')).length);
 const countAlpa = computed(() => attendanceRecords.value.filter(r => r.status === 'Alpa').length);
 
 const metrics = computed(() => [
@@ -22,12 +23,46 @@ const metrics = computed(() => [
     { title: 'Alpa', value: countAlpa.value, sub: 'karyawan', trend: 'Harus ditindaklanjuti admin', icon: 'M13 7a4 4 0 11-8 0 4 4 0 018 0zM9 14a6 6 0 00-6 6h12a6 6 0 00-6-6zM21 12h-6', bg: 'bg-rose-50', text: 'text-rose-500' },
 ]);
 
+// Photo modal states
 const showPhotoModal = ref(false);
 const selectedPhotoRecord = ref(null);
+const selectedPhotoType = ref('masuk'); // 'masuk' | 'pulang'
 
-const openPhotoModal = (rec) => {
+const openPhotoModal = (rec, type = 'masuk') => {
     selectedPhotoRecord.value = rec;
+    selectedPhotoType.value = type;
     showPhotoModal.value = true;
+};
+
+const currentModalPhoto = computed(() => {
+    if (!selectedPhotoRecord.value) return null;
+    if (selectedPhotoType.value === 'pulang') {
+        return selectedPhotoRecord.value.photoOut || null;
+    }
+    return selectedPhotoRecord.value.photo || null;
+});
+
+const currentModalTime = computed(() => {
+    if (!selectedPhotoRecord.value) return '-';
+    if (selectedPhotoType.value === 'pulang') {
+        return selectedPhotoRecord.value.timeOut || '-';
+    }
+    return selectedPhotoRecord.value.timeIn || '-';
+});
+
+const formatDateIndo = (dateStr) => {
+    if (!dateStr) return 'Hari ini';
+    try {
+        const parts = dateStr.split('-');
+        if (parts.length === 3) {
+            const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+            const day = parseInt(parts[2], 10);
+            const month = months[parseInt(parts[1], 10) - 1];
+            const year = parts[0];
+            return `${day} ${month} ${year}`;
+        }
+    } catch (e) {}
+    return dateStr;
 };
 
 const activities = computed(() => {
@@ -104,7 +139,7 @@ const downloadReport = () => {
                         </span>
                         <span class="bg-white/20 backdrop-blur border border-white/30 text-white text-xs font-semibold px-3 py-1.5 rounded-full flex items-center gap-1.5">
                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
-                            12 karyawan aktif
+                            {{ activeEmployeesCount }} karyawan aktif
                         </span>
                     </div>
                 </div>
@@ -312,12 +347,21 @@ const downloadReport = () => {
                                     </span>
                                 </td>
                                 <td class="px-6 py-3 text-center">
-                                    <button v-if="att.photo" @click="openPhotoModal(att)" 
-                                        class="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200/80 rounded-lg transition-colors shadow-2xs">
-                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path></svg>
-                                        <span>Foto</span>
-                                    </button>
-                                    <span v-else class="text-xs text-slate-400 italic">-</span>
+                                    <div class="flex items-center justify-center gap-1.5">
+                                        <button v-if="att.photo" @click="openPhotoModal(att, 'masuk')" 
+                                            class="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200/80 rounded-lg transition-colors shadow-2xs"
+                                            title="Lihat foto bukti masuk">
+                                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path></svg>
+                                            <span>Masuk</span>
+                                        </button>
+                                        <button v-if="att.photoOut" @click="openPhotoModal(att, 'pulang')" 
+                                            class="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-emerald-600 hover:text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/80 rounded-lg transition-colors shadow-2xs"
+                                            title="Lihat foto bukti pulang">
+                                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+                                            <span>Pulang</span>
+                                        </button>
+                                        <span v-if="!att.photo && !att.photoOut" class="text-xs text-slate-400 italic">-</span>
+                                    </div>
                                 </td>
                                 <td class="px-6 py-3 text-[13px] font-bold text-slate-700 text-right">{{ att.points }}</td>
                             </tr>
@@ -331,7 +375,10 @@ const downloadReport = () => {
                 </div>
                 <div class="p-4 border-t border-slate-100 flex justify-between items-center text-xs text-slate-500 bg-slate-50/50">
                     <span>Menampilkan {{ filteredAttendances.length }} dari {{ recentAttendances.length }} karyawan</span>
-                    <a href="/admin/employees" class="font-semibold text-blue-600 hover:underline flex items-center gap-1">Lihat semua absensi <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg></a>
+                    <Link href="/admin/manual-attendance" class="font-semibold text-blue-600 hover:underline flex items-center gap-1">
+                        <span>Lihat semua di Rekap Absensi</span>
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+                    </Link>
                 </div>
             </div>
 
@@ -398,7 +445,7 @@ const downloadReport = () => {
                 <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
                     <div>
                         <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">
-                            <span>Verifikasi Bukti Foto Absen</span>
+                            <span>Verifikasi Bukti Foto Absen {{ selectedPhotoType === 'pulang' ? 'Pulang' : 'Masuk' }}</span>
                             <span class="bg-emerald-100 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded-full">GPS Valid</span>
                         </h3>
                         <p class="text-xs text-slate-500 mt-0.5">{{ selectedPhotoRecord.name }} • {{ selectedPhotoRecord.division }} ({{ selectedPhotoRecord.shift }})</p>
@@ -407,29 +454,65 @@ const downloadReport = () => {
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                     </button>
                 </div>
+
+                <!-- Toggle Selector Masuk / Pulang if both or Pulang available -->
+                <div v-if="selectedPhotoRecord.photoOut || (selectedPhotoRecord.photo && selectedPhotoRecord.timeOut !== '-')" class="px-6 pt-3 bg-white">
+                    <div class="flex items-center gap-2 p-1 bg-slate-100 rounded-xl">
+                        <button @click="selectedPhotoType = 'masuk'" 
+                            class="flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5"
+                            :class="selectedPhotoType === 'masuk' ? 'bg-white text-blue-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"></path></svg>
+                            <span>Foto Masuk ({{ selectedPhotoRecord.timeIn }})</span>
+                        </button>
+                        <button v-if="selectedPhotoRecord.photoOut" @click="selectedPhotoType = 'pulang'" 
+                            class="flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5"
+                            :class="selectedPhotoType === 'pulang' ? 'bg-white text-emerald-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+                            <span>Foto Pulang ({{ selectedPhotoRecord.timeOut }})</span>
+                        </button>
+                    </div>
+                </div>
+
                 <div class="p-6 space-y-4">
+                    <!-- Photo Display Container -->
                     <div class="rounded-xl overflow-hidden border border-slate-200 bg-slate-900 shadow-inner flex items-center justify-center aspect-4/3 relative">
-                        <img v-if="selectedPhotoRecord.photo" 
-                            :src="selectedPhotoRecord.photo" 
+                        <img v-if="currentModalPhoto" 
+                            :src="currentModalPhoto" 
                             :alt="`Bukti Selfie ${selectedPhotoRecord.name}`" 
                             class="w-full h-full object-cover" />
-                        <div v-else class="text-slate-400 text-xs text-center p-6">
-                            Foto bukti tidak tersedia.
+                        <div v-else class="text-slate-400 text-xs text-center p-6 flex flex-col items-center gap-2">
+                            <svg class="w-8 h-8 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                            <span>Foto bukti {{ selectedPhotoType === 'pulang' ? 'pulang' : 'masuk' }} tidak tersedia.</span>
                         </div>
                     </div>
 
+                    <!-- Details Metadata -->
                     <div class="bg-slate-50 rounded-xl p-4 border border-slate-100 space-y-2 text-xs">
                         <div class="flex justify-between items-center">
-                            <span class="text-slate-500">Jam & Tanggal:</span>
-                            <span class="font-bold text-slate-800">{{ selectedPhotoRecord.timeIn }} WITA • {{ selectedPhotoRecord.date || '9 Oktober 2026' }}</span>
+                            <span class="text-slate-500">Waktu & Tanggal:</span>
+                            <span class="font-bold text-slate-800">
+                                {{ currentModalTime }} WITA • {{ formatDateIndo(selectedPhotoRecord.date) }} ({{ selectedPhotoType === 'pulang' ? 'Presensi Pulang' : 'Presensi Datang' }})
+                            </span>
                         </div>
                         <div class="flex justify-between items-center">
                             <span class="text-slate-500">Status Kehadiran:</span>
                             <span class="font-bold text-blue-600">{{ selectedPhotoRecord.status }} ({{ selectedPhotoRecord.points }} poin)</span>
                         </div>
                         <div class="flex justify-between items-center">
+                            <span class="text-slate-500">Titik Koordinat:</span>
+                            <div class="flex items-center gap-2">
+                                <span class="font-mono text-slate-700 font-semibold">{{ Number(selectedPhotoRecord.lat || 0.539716).toFixed(6) }}, {{ Number(selectedPhotoRecord.lng || 123.058278).toFixed(6) }}</span>
+                                <a :href="`https://maps.google.com/?q=${selectedPhotoRecord.lat || 0.539716},${selectedPhotoRecord.lng || 123.058278}`" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800 text-[11px] font-semibold underline inline-flex items-center gap-1">
+                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+                                    Buka Maps
+                                </a>
+                            </div>
+                        </div>
+                        <div class="flex justify-between items-center">
                             <span class="text-slate-500">Jarak ke Pabrik:</span>
-                            <span class="font-bold text-emerald-600">{{ selectedPhotoRecord.distanceMeters ? `${selectedPhotoRecord.distanceMeters} meter (Radius 100m)` : 'Terverifikasi dalam radius pabrik' }}</span>
+                            <span class="font-bold text-emerald-600">
+                                {{ selectedPhotoRecord.distanceMeters ? `${selectedPhotoRecord.distanceMeters} meter (Di dalam radius 100m)` : 'Terverifikasi dalam radius pabrik' }}
+                            </span>
                         </div>
                     </div>
                 </div>

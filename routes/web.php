@@ -27,6 +27,10 @@ Route::get('/employee/attendance', function () {
     return Inertia::render('Employee/Attendance');
 })->name('employee.attendance');
 
+Route::get('/employee/history', function () {
+    return Inertia::render('Employee/History');
+})->name('employee.history');
+
 Route::get('/employee/schedule', function () {
     return Inertia::render('Employee/Schedule');
 })->name('employee.schedule');
@@ -34,6 +38,10 @@ Route::get('/employee/schedule', function () {
 Route::get('/employee/payroll', function () {
     return Inertia::render('Employee/Payroll');
 })->name('employee.payroll');
+
+Route::get('/employee/password', function () {
+    return Inertia::render('Employee/Password');
+})->name('employee.password');
 
 Route::get('/admin', function () {
     return Inertia::render('Admin/Dashboard');
@@ -58,6 +66,10 @@ Route::get('/admin/manual-attendance', function () {
 Route::get('/admin/payroll', function () {
     return Inertia::render('Admin/Payroll');
 })->name('admin.payroll');
+
+Route::get('/admin/profile', function () {
+    return Inertia::render('Admin/Profile');
+})->name('admin.profile');
 
 
 

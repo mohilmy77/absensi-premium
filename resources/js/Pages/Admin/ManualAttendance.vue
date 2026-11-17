@@ -12,21 +12,93 @@ import {
 const searchQuery = ref('');
 const selectedDivision = ref('Semua divisi');
 const selectedShift = ref('Semua shift');
+const selectedPeriod = ref('Semua'); // 'Semua', 'Hari Ini', 'Kemarin', '7 Hari Terakhir', 'Bulan Ini', 'Kustom'
+const customStartDate = ref('');
+const customEndDate = ref('');
+
 const divisions = ['Semua divisi', 'Produksi', 'Kasir', 'Supervisor', 'Driver'];
 const shiftsList = ['Semua shift', 'Shift 1', 'Shift 2', 'Shift 3'];
 
-// Dynamic metrics computed from real reactive attendance records
-const countHadir = computed(() => attendanceRecords.value.filter(r => r.status === 'Tepat waktu' || r.status === 'Terlambat').length);
-const countTerlambat = computed(() => attendanceRecords.value.filter(r => r.status === 'Terlambat').length);
-const countIzinSakit = computed(() => attendanceRecords.value.filter(r => r.status.includes('Izin') || r.status.includes('Sakit') || r.status === 'Cuti').length);
-const countAlpa = computed(() => attendanceRecords.value.filter(r => r.status === 'Alpa').length);
+const periodOptions = [
+    { label: 'Semua Riwayat', value: 'Semua' },
+    { label: 'Hari Ini', value: 'Hari Ini' },
+    { label: 'Kemarin', value: 'Kemarin' },
+    { label: '7 Hari Terakhir', value: '7 Hari Terakhir' },
+    { label: 'Bulan Ini', value: 'Bulan Ini' },
+    { label: 'Pilih Rentang Tanggal', value: 'Kustom' },
+];
 
-const metrics = computed(() => [
-    { title: 'Karyawan hadir', value: countHadir.value, sub: 'Hari ini', icon: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z', bg: 'bg-blue-50', text: 'text-blue-600' },
-    { title: 'Terlambat', value: countTerlambat.value, sub: 'Seluruh shift', icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z', bg: 'bg-amber-50', text: 'text-amber-500' },
-    { title: 'Izin / sakit', value: countIzinSakit.value, sub: 'Status manual admin', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2', bg: 'bg-sky-50', text: 'text-sky-500' },
-    { title: 'Alpa', value: countAlpa.value, sub: 'Upah hangus - denda Rp100.000', icon: 'M13 7a4 4 0 11-8 0 4 4 0 018 0zM9 14a6 6 0 00-6 6h12a6 6 0 00-6-6zM21 12h-6', bg: 'bg-rose-50', text: 'text-rose-500' },
-]);
+// Helper Date Functions
+const getTodayStr = () => new Date().toISOString().split('T')[0];
+
+const getYesterdayStr = () => {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    return d.toISOString().split('T')[0];
+};
+
+const getDaysAgoStr = (days) => {
+    const d = new Date();
+    d.setDate(d.getDate() - days);
+    return d.toISOString().split('T')[0];
+};
+
+const getCurrentMonthPrefix = () => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    return `${year}-${month}`;
+};
+
+const formatDateIndo = (dateStr) => {
+    if (!dateStr || dateStr === '-') return '-';
+    try {
+        const parts = dateStr.split('-');
+        if (parts.length !== 3) return dateStr;
+        const [y, m, d] = parts;
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+        const monthName = months[parseInt(m, 10) - 1] || m;
+        return `${parseInt(d, 10)} ${monthName} ${y}`;
+    } catch {
+        return dateStr;
+    }
+};
+
+const activePeriodDescription = computed(() => {
+    const todayStr = getTodayStr();
+    const yesterdayStr = getYesterdayStr();
+    switch (selectedPeriod.value) {
+        case 'Hari Ini':
+            return `Hari Ini (${formatDateIndo(todayStr)})`;
+        case 'Kemarin':
+            return `Kemarin (${formatDateIndo(yesterdayStr)})`;
+        case '7 Hari Terakhir':
+            return `7 Hari Terakhir (${formatDateIndo(getDaysAgoStr(7))} - ${formatDateIndo(todayStr)})`;
+        case 'Bulan Ini': {
+            const d = new Date();
+            const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+            return `Bulan ${months[d.getMonth()]} ${d.getFullYear()}`;
+        }
+        case 'Kustom':
+            if (customStartDate.value && customEndDate.value) {
+                return `${formatDateIndo(customStartDate.value)} s/d ${formatDateIndo(customEndDate.value)}`;
+            } else if (customStartDate.value) {
+                return `Mulai ${formatDateIndo(customStartDate.value)}`;
+            } else if (customEndDate.value) {
+                return `Sampai ${formatDateIndo(customEndDate.value)}`;
+            }
+            return 'Rentang Tanggal Kustom';
+        default:
+            return 'Seluruh Riwayat Absensi';
+    }
+});
+
+const tableHeaderTitle = computed(() => {
+    if (selectedPeriod.value === 'Hari Ini') return 'Absensi hari ini';
+    if (selectedPeriod.value === 'Kemarin') return 'Absensi kemarin';
+    if (selectedPeriod.value === 'Semua') return 'Seluruh riwayat absensi';
+    return 'Riwayat absensi';
+});
 
 // Modals
 const showModal = ref(false);
@@ -73,9 +145,37 @@ const openAddModal = () => {
     showModal.value = true;
 };
 
-const openPhotoModal = (rec) => {
+const selectedPhotoType = ref('masuk'); // 'masuk' or 'pulang'
+
+const openPhotoModal = (rec, type = 'masuk') => {
     selectedPhotoRecord.value = rec;
+    selectedPhotoType.value = type;
     showPhotoModal.value = true;
+};
+
+const currentModalPhoto = computed(() => {
+    if (!selectedPhotoRecord.value) return null;
+    if (selectedPhotoType.value === 'pulang') {
+        return selectedPhotoRecord.value.photoOut || null;
+    }
+    return selectedPhotoRecord.value.photo || selectedPhotoRecord.value.attachment || null;
+});
+
+const currentModalTime = computed(() => {
+    if (!selectedPhotoRecord.value) return '-';
+    if (selectedPhotoType.value === 'pulang') {
+        return selectedPhotoRecord.value.timeOut || '-';
+    }
+    return selectedPhotoRecord.value.timeIn || '-';
+});
+
+const formatDateSlash = (dateStr) => {
+    if (!dateStr || dateStr === '-') return '09/11/2026';
+    if (dateStr.includes('-')) {
+        const parts = dateStr.split('-');
+        if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    }
+    return dateStr;
 };
 
 const handleFileUpload = (e) => {
@@ -147,15 +247,59 @@ const executeDelete = () => {
 };
 
 const filteredRecords = computed(() => {
+    const todayStr = getTodayStr();
+    const yesterdayStr = getYesterdayStr();
+    const sevenDaysAgoStr = getDaysAgoStr(7);
+    const monthPrefix = getCurrentMonthPrefix();
+
     return attendanceRecords.value.filter(att => {
-        const matchName = att.name.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
-                          att.id.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
-                          (att.employeeId && att.employeeId.toLowerCase().includes(searchQuery.value.toLowerCase()));
+        const query = searchQuery.value.toLowerCase().trim();
+        const matchName = !query ||
+            att.name.toLowerCase().includes(query) ||
+            att.id.toLowerCase().includes(query) ||
+            (att.employeeId && att.employeeId.toLowerCase().includes(query));
+
         const matchDiv = selectedDivision.value === 'Semua divisi' || att.division === selectedDivision.value;
         const matchShift = selectedShift.value === 'Semua shift' || att.shift === selectedShift.value;
-        return matchName && matchDiv && matchShift;
+
+        // Date matching
+        let matchDate = true;
+        const attDate = att.date || '';
+
+        if (selectedPeriod.value === 'Hari Ini') {
+            matchDate = attDate === todayStr;
+        } else if (selectedPeriod.value === 'Kemarin') {
+            matchDate = attDate === yesterdayStr;
+        } else if (selectedPeriod.value === '7 Hari Terakhir') {
+            matchDate = attDate >= sevenDaysAgoStr && attDate <= todayStr;
+        } else if (selectedPeriod.value === 'Bulan Ini') {
+            matchDate = attDate.startsWith(monthPrefix);
+        } else if (selectedPeriod.value === 'Kustom') {
+            if (customStartDate.value && customEndDate.value) {
+                matchDate = attDate >= customStartDate.value && attDate <= customEndDate.value;
+            } else if (customStartDate.value) {
+                matchDate = attDate >= customStartDate.value;
+            } else if (customEndDate.value) {
+                matchDate = attDate <= customEndDate.value;
+            }
+        }
+
+        return matchName && matchDiv && matchShift && matchDate;
     });
 });
+
+// Dynamic metrics computed from filtered attendance records
+const countHadir = computed(() => filteredRecords.value.filter(r => r.status === 'Tepat waktu' || r.status === 'Terlambat').length);
+const countTerlambat = computed(() => filteredRecords.value.filter(r => r.status === 'Terlambat').length);
+const countIzinSakit = computed(() => filteredRecords.value.filter(r => r.status.includes('Izin') || r.status.includes('Sakit') || r.status === 'Cuti').length);
+const countAlpa = computed(() => filteredRecords.value.filter(r => r.status === 'Alpa').length);
+
+const metrics = computed(() => [
+    { title: 'Karyawan hadir', value: countHadir.value, sub: activePeriodDescription.value, icon: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z', bg: 'bg-blue-50', text: 'text-blue-600' },
+    { title: 'Terlambat', value: countTerlambat.value, sub: activePeriodDescription.value, icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z', bg: 'bg-amber-50', text: 'text-amber-500' },
+    { title: 'Izin / sakit', value: countIzinSakit.value, sub: 'Surat / izin disetujui', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2', bg: 'bg-sky-50', text: 'text-sky-500' },
+    { title: 'Alpa', value: countAlpa.value, sub: 'Upah hangus - denda Rp100.000', icon: 'M13 7a4 4 0 11-8 0 4 4 0 018 0zM9 14a6 6 0 00-6 6h12a6 6 0 00-6-6zM21 12h-6', bg: 'bg-rose-50', text: 'text-rose-500' },
+]);
 
 // Pagination: 6 data per halaman
 const currentPage = ref(1);
@@ -166,7 +310,26 @@ const paginatedRecords = computed(() => {
     return filteredRecords.value.slice(start, start + pageSize);
 });
 
-watch([searchQuery, selectedDivision, selectedShift], () => {
+// Reset filter state helpers
+const resetAllFilters = () => {
+    searchQuery.value = '';
+    selectedDivision.value = 'Semua divisi';
+    selectedShift.value = 'Semua shift';
+    selectedPeriod.value = 'Semua';
+    customStartDate.value = '';
+    customEndDate.value = '';
+};
+
+const isAnyFilterActive = computed(() => {
+    return searchQuery.value !== '' || 
+        selectedDivision.value !== 'Semua divisi' || 
+        selectedShift.value !== 'Semua shift' || 
+        selectedPeriod.value !== 'Semua' || 
+        customStartDate.value !== '' || 
+        customEndDate.value !== '';
+});
+
+watch([searchQuery, selectedDivision, selectedShift, selectedPeriod, customStartDate, customEndDate], () => {
     currentPage.value = 1;
 });
 
@@ -226,44 +389,100 @@ const exportAttendanceCSV = () => {
 
             <!-- Table Card -->
             <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-                <div class="p-6 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white">
-                    <div>
-                        <h3 class="text-lg font-bold text-slate-900">Absensi hari ini</h3>
-                        <p class="text-xs text-slate-500 mt-1">{{ filteredRecords.length }} karyawan tercatat dalam sistem</p>
+                <div class="p-6 border-b border-slate-100 flex flex-col gap-4 bg-white">
+                    <!-- Top row: Title and Controls -->
+                    <div class="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+                        <div>
+                            <div class="flex items-center gap-2.5">
+                                <h3 class="text-lg font-bold text-slate-900">{{ tableHeaderTitle }}</h3>
+                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                                    {{ activePeriodDescription }}
+                                </span>
+                            </div>
+                            <p class="text-xs text-slate-500 mt-1">
+                                {{ filteredRecords.length }} catatan absensi ditemukan dalam sistem
+                            </p>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-2.5">
+                            <!-- Search -->
+                            <div class="relative">
+                                <input v-model="searchQuery" type="text" placeholder="Cari nama / NIK..." 
+                                    class="w-44 sm:w-52 pl-9 pr-3.5 py-2 text-xs border border-slate-200 rounded-xl bg-slate-50/70 hover:bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-slate-800 transition-all">
+                                <svg class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                                </svg>
+                            </div>
+
+                            <!-- Periode / Tanggal Dropdown -->
+                            <div class="relative inline-block">
+                                <select v-model="selectedPeriod" 
+                                    class="appearance-none pl-3.5 pr-10 py-2 text-xs font-semibold border border-slate-200 rounded-xl bg-slate-50/70 hover:bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-slate-700 cursor-pointer transition-all">
+                                    <option v-for="opt in periodOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+                                </select>
+                                <div class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-slate-400">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                    </svg>
+                                </div>
+                            </div>
+
+                            <!-- Division Dropdown -->
+                            <div class="relative inline-block">
+                                <select v-model="selectedDivision" 
+                                    class="appearance-none pl-3.5 pr-10 py-2 text-xs font-semibold border border-slate-200 rounded-xl bg-slate-50/70 hover:bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-slate-700 cursor-pointer transition-all">
+                                    <option v-for="div in divisions" :key="div" :value="div">{{ div }}</option>
+                                </select>
+                                <div class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-slate-400">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                    </svg>
+                                </div>
+                            </div>
+
+                            <!-- Shift Dropdown -->
+                            <div class="relative inline-block">
+                                <select v-model="selectedShift" 
+                                    class="appearance-none pl-3.5 pr-10 py-2 text-xs font-semibold border border-slate-200 rounded-xl bg-slate-50/70 hover:bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-slate-700 cursor-pointer transition-all">
+                                    <option v-for="sh in shiftsList" :key="sh" :value="sh">{{ sh }}</option>
+                                </select>
+                                <div class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-slate-400">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                    </svg>
+                                </div>
+                            </div>
+
+                            <!-- Reset Filter Button (active if any filter selected) -->
+                            <button v-if="isAnyFilterActive" @click="resetAllFilters" title="Reset filter" class="h-[34px] px-3 flex items-center gap-1.5 border border-rose-200 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 text-xs font-semibold transition-colors shadow-2xs">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                <span>Reset</span>
+                            </button>
+
+                            <!-- Export CSV -->
+                            <button @click="exportAttendanceCSV" title="Ekspor data hasil filter ke CSV" class="h-[34px] px-3.5 flex items-center gap-1.5 border border-slate-200 rounded-xl bg-slate-50/70 hover:bg-white text-slate-700 text-xs font-semibold transition-colors shadow-xs">
+                                <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                                <span>Ekspor CSV</span>
+                            </button>
+                        </div>
                     </div>
-                    <div class="flex items-center gap-3">
-                        <div class="relative">
-                            <input v-model="searchQuery" type="text" placeholder="Cari nama karyawan..." 
-                                class="w-60 pl-9 pr-3.5 py-2 text-xs border border-slate-200 rounded-xl bg-slate-50/70 hover:bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-slate-800 transition-all">
-                            <svg class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
-                            </svg>
+
+                    <!-- Custom Date Range Bar (shown when 'Kustom' is selected) -->
+                    <div v-if="selectedPeriod === 'Kustom'" class="pt-3 border-t border-slate-100 flex flex-wrap items-center gap-3 bg-slate-50/60 p-3 rounded-xl border border-dashed border-slate-200">
+                        <span class="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                            <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                            Pilih Rentang Tanggal:
+                        </span>
+                        <div class="flex items-center gap-2">
+                            <label class="text-[11px] font-semibold text-slate-500">Dari:</label>
+                            <input type="date" v-model="customStartDate" class="px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-slate-700">
                         </div>
-                        <div class="relative inline-block">
-                            <select v-model="selectedDivision" 
-                                class="appearance-none pl-3.5 pr-10 py-2 text-xs font-semibold border border-slate-200 rounded-xl bg-slate-50/70 hover:bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-slate-700 cursor-pointer transition-all">
-                                <option v-for="div in divisions" :key="div" :value="div">{{ div }}</option>
-                            </select>
-                            <div class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-slate-400">
-                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                                </svg>
-                            </div>
+                        <div class="flex items-center gap-2">
+                            <label class="text-[11px] font-semibold text-slate-500">Sampai:</label>
+                            <input type="date" v-model="customEndDate" class="px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-slate-700">
                         </div>
-                        <div class="relative inline-block">
-                            <select v-model="selectedShift" 
-                                class="appearance-none pl-3.5 pr-10 py-2 text-xs font-semibold border border-slate-200 rounded-xl bg-slate-50/70 hover:bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-slate-700 cursor-pointer transition-all">
-                                <option v-for="sh in shiftsList" :key="sh" :value="sh">{{ sh }}</option>
-                            </select>
-                            <div class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-slate-400">
-                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                                </svg>
-                            </div>
-                        </div>
-                        <button @click="exportAttendanceCSV" title="Ekspor data ke CSV" class="h-[34px] px-3 flex items-center justify-center border border-slate-200 rounded-xl bg-slate-50/70 hover:bg-white text-slate-600 transition-colors shadow-sm">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-                        </button>
+                        <span class="text-[11px] text-slate-400 italic">
+                            (Pilih tanggal awal dan/atau akhir untuk menyaring catatan absensi)
+                        </span>
                     </div>
                 </div>
                 
@@ -274,6 +493,7 @@ const exportAttendanceCSV = () => {
                                 <th class="px-6 py-4 font-semibold">Karyawan</th>
                                 <th class="px-6 py-4 font-semibold">Divisi</th>
                                 <th class="px-6 py-4 font-semibold">Shift</th>
+                                <th class="px-6 py-4 font-semibold">Tanggal</th>
                                 <th class="px-6 py-4 font-semibold">Jam masuk</th>
                                 <th class="px-6 py-4 font-semibold">Jam pulang</th>
                                 <th class="px-6 py-4 font-semibold text-center">Status</th>
@@ -299,6 +519,9 @@ const exportAttendanceCSV = () => {
                                 <td class="px-6 py-4">
                                     <span class="text-xs font-semibold text-slate-700">{{ att.shift }}</span>
                                 </td>
+                                <td class="px-6 py-4 text-[13px] text-slate-700 font-medium">
+                                    {{ formatDateIndo(att.date) }}
+                                </td>
                                 <td class="px-6 py-4 text-[13px] text-slate-600 font-medium">
                                     {{ att.timeIn }} <span v-if="att.timeIn && att.timeIn !== '-'" class="text-[10px] text-slate-400 font-normal">WITA</span>
                                 </td>
@@ -320,14 +543,28 @@ const exportAttendanceCSV = () => {
                                         {{ att.status }}
                                     </span>
                                 </td>
-                                <!-- Bukti Foto Column -->
+                                <!-- Bukti Foto Column (Masuk & Pulang) -->
                                 <td class="px-6 py-4 text-center">
-                                    <button v-if="att.photo || att.attachment" @click="openPhotoModal(att)" 
-                                        class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200/80 rounded-lg transition-colors shadow-2xs">
-                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
-                                        <span>Lihat Foto</span>
-                                    </button>
-                                    <span v-else class="text-xs text-slate-400 italic">Tidak ada foto</span>
+                                    <div class="flex items-center justify-center gap-1.5">
+                                        <!-- Foto Masuk Button -->
+                                        <button v-if="att.photo || att.attachment" @click="openPhotoModal(att, 'masuk')" 
+                                            class="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-blue-700 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 border border-blue-200/90 rounded-lg transition-colors shadow-2xs"
+                                            title="Lihat Bukti Foto Absen Masuk">
+                                            <svg class="w-3.5 h-3.5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path></svg>
+                                            <span>Masuk</span>
+                                        </button>
+                                        <span v-else class="text-xs text-slate-300">-</span>
+
+                                        <!-- Foto Pulang Button -->
+                                        <button v-if="att.photoOut" @click="openPhotoModal(att, 'pulang')" 
+                                            class="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/90 rounded-lg transition-colors shadow-2xs"
+                                            title="Lihat Bukti Foto Absen Pulang">
+                                            <svg class="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path></svg>
+                                            <span>Pulang</span>
+                                        </button>
+                                        <span v-else-if="att.timeOut && att.timeOut !== '-'" class="text-[11px] text-slate-400 italic" title="Foto pulang tidak ada">-</span>
+                                        <span v-else class="text-xs text-slate-300" title="Belum absen pulang">-</span>
+                                    </div>
                                 </td>
                                 <td class="px-6 py-4 text-[13px] font-bold text-slate-700 text-right">{{ att.points }}</td>
                                 <td class="px-6 py-4 text-right">
@@ -337,8 +574,8 @@ const exportAttendanceCSV = () => {
                                 </td>
                             </tr>
                             <tr v-if="filteredRecords.length === 0">
-                                <td colspan="9" class="px-6 py-12 text-center text-slate-400 text-xs">
-                                    Tidak ada data absensi yang sesuai dengan kriteria pencarian.
+                                <td colspan="10" class="px-6 py-12 text-center text-slate-400 text-xs">
+                                    Tidak ada data absensi yang sesuai dengan kriteria filter dan pencarian.
                                 </td>
                             </tr>
                         </tbody>
@@ -398,7 +635,7 @@ const exportAttendanceCSV = () => {
                 <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
                     <div>
                         <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">
-                            <span>Verifikasi Bukti Foto Absen</span>
+                            <span>Verifikasi Bukti Foto Absen {{ selectedPhotoType === 'pulang' ? 'Pulang' : 'Masuk' }}</span>
                             <span class="bg-emerald-100 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded-full">GPS Valid</span>
                         </h3>
                         <p class="text-xs text-slate-500 mt-0.5">{{ selectedPhotoRecord.name }} • {{ selectedPhotoRecord.division }} ({{ selectedPhotoRecord.shift }})</p>
@@ -407,35 +644,65 @@ const exportAttendanceCSV = () => {
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                     </button>
                 </div>
+
+                <!-- Toggle Selector Masuk / Pulang if both or Pulang available -->
+                <div v-if="selectedPhotoRecord.photoOut || (selectedPhotoRecord.photo && selectedPhotoRecord.timeOut !== '-')" class="px-6 pt-3 bg-white">
+                    <div class="flex items-center gap-2 p-1 bg-slate-100 rounded-xl">
+                        <button @click="selectedPhotoType = 'masuk'" 
+                            class="flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5"
+                            :class="selectedPhotoType === 'masuk' ? 'bg-white text-blue-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"></path></svg>
+                            <span>Foto Masuk ({{ selectedPhotoRecord.timeIn }})</span>
+                        </button>
+                        <button v-if="selectedPhotoRecord.photoOut" @click="selectedPhotoType = 'pulang'" 
+                            class="flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5"
+                            :class="selectedPhotoType === 'pulang' ? 'bg-white text-emerald-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+                            <span>Foto Pulang ({{ selectedPhotoRecord.timeOut }})</span>
+                        </button>
+                    </div>
+                </div>
+
                 <div class="p-6 space-y-4">
                     <!-- Photo Display Container -->
                     <div class="rounded-xl overflow-hidden border border-slate-200 bg-slate-900 shadow-inner flex items-center justify-center aspect-4/3 relative">
-                        <img v-if="selectedPhotoRecord.photo || selectedPhotoRecord.attachment" 
-                            :src="selectedPhotoRecord.photo || selectedPhotoRecord.attachment" 
+                        <img v-if="currentModalPhoto" 
+                            :src="currentModalPhoto" 
                             :alt="`Bukti Selfie ${selectedPhotoRecord.name}`" 
                             class="w-full h-full object-cover" />
-                        <div v-else class="text-slate-400 text-xs text-center p-6">
-                            Foto bukti tidak tersedia.
+                        <div v-else class="text-slate-400 text-xs text-center p-6 flex flex-col items-center gap-2">
+                            <svg class="w-8 h-8 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                            <span>Foto bukti {{ selectedPhotoType === 'pulang' ? 'pulang' : 'masuk' }} tidak tersedia.</span>
                         </div>
                     </div>
 
-                    <!-- Details Metadata -->
+                    <!-- Details Metadata (Tanpa Catatan) -->
                     <div class="bg-slate-50 rounded-xl p-4 border border-slate-100 space-y-2 text-xs">
                         <div class="flex justify-between items-center">
-                            <span class="text-slate-500">Jam & Tanggal:</span>
-                            <span class="font-bold text-slate-800">{{ selectedPhotoRecord.timeIn }} WITA • {{ selectedPhotoRecord.date || '9 Oktober 2026' }}</span>
+                            <span class="text-slate-500">Waktu & Tanggal:</span>
+                            <span class="font-bold text-slate-800">
+                                {{ currentModalTime }} WITA • {{ formatDateIndo(selectedPhotoRecord.date) }} ({{ selectedPhotoType === 'pulang' ? 'Presensi Pulang' : 'Presensi Datang' }})
+                            </span>
                         </div>
                         <div class="flex justify-between items-center">
                             <span class="text-slate-500">Status Kehadiran:</span>
                             <span class="font-bold text-blue-600">{{ selectedPhotoRecord.status }} ({{ selectedPhotoRecord.points }} poin)</span>
                         </div>
                         <div class="flex justify-between items-center">
-                            <span class="text-slate-500">Jarak ke Pabrik:</span>
-                            <span class="font-bold text-emerald-600">{{ selectedPhotoRecord.distanceMeters ? `${selectedPhotoRecord.distanceMeters} meter (Di dalam radius 100m)` : 'Terverifikasi dalam radius pabrik' }}</span>
+                            <span class="text-slate-500">Titik Koordinat:</span>
+                            <div class="flex items-center gap-2">
+                                <span class="font-mono text-slate-700 font-semibold">{{ (selectedPhotoRecord.lat || 0.539716).toFixed(6) }}, {{ (selectedPhotoRecord.lng || 123.058278).toFixed(6) }}</span>
+                                <a :href="`https://maps.google.com/?q=${selectedPhotoRecord.lat || 0.539716},${selectedPhotoRecord.lng || 123.058278}`" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800 text-[11px] font-semibold underline inline-flex items-center gap-1">
+                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+                                    Buka Maps
+                                </a>
+                            </div>
                         </div>
-                        <div v-if="selectedPhotoRecord.notes" class="pt-2 border-t border-slate-200/60">
-                            <span class="text-slate-500 block mb-0.5">Catatan:</span>
-                            <span class="text-slate-800 font-medium">{{ selectedPhotoRecord.notes }}</span>
+                        <div class="flex justify-between items-center">
+                            <span class="text-slate-500">Jarak ke Pabrik:</span>
+                            <span class="font-bold text-emerald-600">
+                                {{ selectedPhotoRecord.distanceMeters ? `${selectedPhotoRecord.distanceMeters} meter (Di dalam radius 100m)` : 'Terverifikasi dalam radius pabrik' }}
+                            </span>
                         </div>
                     </div>
                 </div>
